@@ -102,3 +102,83 @@ class QMailUploadAndIngestionTests(TestCase):
         # Cleanup test upload file
         if expected_path.exists():
             expected_path.unlink()
+
+    def test_cancellation_flow(self):
+        inv = MailboxInvestigation.objects.create(
+            audit_ref="AUD-CANCEL-001",
+            audit_name="Cancellation Test",
+            auditee_name="Jane Doe",
+            auditee_email="jane.doe@enterprise.internal",
+            status=MailboxInvestigation.IngestionStatus.PROCESSING,
+        )
+
+        cancel_url = reverse("q_mail:cancel_process", kwargs={"mailbox_id": inv.id})
+        res = self.client.post(cancel_url)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.json()["success"])
+
+        inv.refresh_from_db()
+        self.assertTrue(inv.is_cancellation_requested)
+
+        # Check progress API returns cancellation flag
+        prog_url = reverse("q_mail:progress_api", kwargs={"mailbox_id": inv.id})
+        prog_res = self.client.get(prog_url)
+        self.assertEqual(prog_res.status_code, 200)
+        self.assertTrue(prog_res.json()["is_cancellation_requested"])
+
+    def test_stalled_investigation_recovery(self):
+        from datetime import UTC, datetime, timedelta
+
+        from .services import recover_stalled_investigations
+
+        # 1. Stalled investigation (heartbeat 10 minutes ago)
+        stalled_inv = MailboxInvestigation.objects.create(
+            audit_ref="AUD-STALL-001",
+            audit_name="Stall Test",
+            auditee_name="Stalled User",
+            auditee_email="stalled@enterprise.internal",
+            status=MailboxInvestigation.IngestionStatus.PROCESSING,
+            last_heartbeat_at=datetime.now(UTC) - timedelta(minutes=10),
+        )
+
+        # 2. Healthy active investigation (heartbeat 5 seconds ago)
+        active_inv = MailboxInvestigation.objects.create(
+            audit_ref="AUD-ACTIVE-002",
+            audit_name="Active Test",
+            auditee_name="Active User",
+            auditee_email="active@enterprise.internal",
+            status=MailboxInvestigation.IngestionStatus.PROCESSING,
+            last_heartbeat_at=datetime.now(UTC) - timedelta(seconds=5),
+        )
+
+        # Run recovery
+        recovered_count = recover_stalled_investigations(stale_seconds=180)
+        self.assertEqual(recovered_count, 1)
+
+        stalled_inv.refresh_from_db()
+        active_inv.refresh_from_db()
+
+        self.assertEqual(stalled_inv.status, MailboxInvestigation.IngestionStatus.STALLED)
+        self.assertIn("interrupted", stalled_inv.error_message)
+        self.assertEqual(active_inv.status, MailboxInvestigation.IngestionStatus.PROCESSING)
+
+    def test_restart_resumes_stalled_investigation(self):
+        inv = MailboxInvestigation.objects.create(
+            audit_ref="AUD-RESUME-001",
+            audit_name="Resume Test",
+            auditee_name="Resume User",
+            auditee_email="resume@enterprise.internal",
+            status=MailboxInvestigation.IngestionStatus.STALLED,
+            error_message="Previous crash",
+            is_cancellation_requested=True,
+        )
+
+        # Trigger restart
+        process_url = reverse("q_mail:trigger_process", kwargs={"mailbox_id": inv.id})
+        res = self.client.post(process_url)
+        self.assertEqual(res.status_code, 200)
+
+        inv.refresh_from_db()
+        self.assertEqual(inv.status, MailboxInvestigation.IngestionStatus.PROCESSING)
+        self.assertFalse(inv.is_cancellation_requested)
+        self.assertEqual(inv.error_message, "")

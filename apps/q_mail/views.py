@@ -23,8 +23,10 @@ from .selectors import (
     list_mailbox_investigations,
 )
 from .services import (
+    cancel_mailbox_processing,
     create_mailbox_investigation,
     handle_chunked_upload,
+    recover_stalled_investigations,
     start_mailbox_processing,
 )
 
@@ -34,6 +36,7 @@ def investigation_list_view(request: HttpRequest) -> HttpResponse:
     """
     Main Q-Mail Dashboard: Lists all audit mailbox investigations and upload portal.
     """
+    recover_stalled_investigations()
     investigations = list_mailbox_investigations()
 
     total_mailboxes = investigations.count()
@@ -145,6 +148,22 @@ def trigger_processing_view(request: HttpRequest, mailbox_id: str) -> JsonRespon
     return JsonResponse({"success": True, "message": "Background ingestion worker started."})
 
 
+@require_POST
+def cancel_processing_view(request: HttpRequest, mailbox_id: str) -> JsonResponse:
+    """
+    Signals active background ingestion worker to stop immediately.
+    """
+    success = cancel_mailbox_processing(mailbox_id)
+    return JsonResponse(
+        {
+            "success": success,
+            "message": "Cancellation signal dispatched."
+            if success
+            else "No active processing worker to cancel.",
+        }
+    )
+
+
 @require_GET
 def progress_api_view(request: HttpRequest, mailbox_id: str) -> JsonResponse:
     """
@@ -202,6 +221,7 @@ def investigation_detail_view(request: HttpRequest, mailbox_id: str) -> HttpResp
     """
     Investigation Workstation: Tabulator.js email grid, Plotly counterparty charts, and evidence filters.
     """
+    recover_stalled_investigations()
     summary = get_investigation_summary_metrics(mailbox_id)
     inv = summary["investigation"]
 

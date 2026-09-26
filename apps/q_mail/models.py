@@ -15,6 +15,7 @@ class MailboxInvestigation(ForensicBaseModel):
         COMPLETED = "COMPLETED", "Completed"
         FAILED = "FAILED", "Failed"
         CANCELLED = "CANCELLED", "Cancelled"
+        STALLED = "STALLED", "Stalled / Interrupted"
 
     # Audit & Auditee Details
     audit_ref = models.CharField(
@@ -38,7 +39,7 @@ class MailboxInvestigation(ForensicBaseModel):
         max_length=64, blank=True, default="", help_text="Chain of Custody Hash"
     )
 
-    # Ingestion & Asynchronous Task State
+    # Ingestion & Asynchronous Task State Machine
     status = models.CharField(
         max_length=32,
         choices=IngestionStatus.choices,
@@ -53,8 +54,11 @@ class MailboxInvestigation(ForensicBaseModel):
     error_message = models.TextField(blank=True, default="")
     processing_started_at = models.DateTimeField(null=True, blank=True)
     processing_completed_at = models.DateTimeField(null=True, blank=True)
+    last_heartbeat_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    is_cancellation_requested = models.BooleanField(default=False, db_index=True)
 
     class Meta:
+        app_label = "q_mail"
         ordering = ["-created_at"]
         verbose_name = "Mailbox Investigation"
         verbose_name_plural = "Mailbox Investigations"
@@ -108,6 +112,7 @@ class EmailMessage(ForensicBaseModel):
     is_flagged = models.BooleanField(default=False, db_index=True)
 
     class Meta:
+        app_label = "q_mail"
         ordering = ["-sent_date", "-created_at"]
         indexes = [
             models.Index(fields=["mailbox", "-sent_date"]),
@@ -144,6 +149,7 @@ class EmailAttachment(ForensicBaseModel):
     is_suspicious = models.BooleanField(default=False, db_index=True)
 
     class Meta:
+        app_label = "q_mail"
         ordering = ["filename"]
         verbose_name = "Email Attachment"
         verbose_name_plural = "Email Attachments"
@@ -180,6 +186,7 @@ class EmailParticipant(ForensicBaseModel):
     is_external_domain = models.BooleanField(default=False)
 
     class Meta:
+        app_label = "q_mail"
         ordering = ["-sent_count", "-received_count"]
         unique_together = ("mailbox", "email_address")
         verbose_name = "Email Participant"

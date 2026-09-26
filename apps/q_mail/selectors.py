@@ -42,6 +42,8 @@ def get_mailbox_progress_state(mailbox_id: str | uuid.UUID) -> dict[str, Any]:
         "attachment_count": inv.attachment_count,
         "current_folder": inv.current_folder,
         "error_message": inv.error_message,
+        "is_cancellation_requested": inv.is_cancellation_requested,
+        "last_heartbeat_at": inv.last_heartbeat_at.isoformat() if inv.last_heartbeat_at else None,
         "is_active": inv.status
         in (
             MailboxInvestigation.IngestionStatus.UPLOADING,

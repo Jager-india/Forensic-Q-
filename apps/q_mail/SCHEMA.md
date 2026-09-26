@@ -13,42 +13,94 @@
 // dbdiagram.io specification
 // ==========================================
 
-Table mailboxes {
+Enum IngestionStatus {
+  PENDING
+  UPLOADING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  STALLED
+}
+
+Table mailbox_investigations {
   id uuid [pk, default: `uuid4()`]
-  custodian_name varchar(255) [not null]
-  email_address varchar(255) [not null]
-  pst_source_file varchar(255)
-  total_messages int [default: 0]
+  audit_ref varchar(64) [not null, db_index: true, note: 'Audit Case Number']
+  audit_name varchar(255) [not null]
+  auditee_name varchar(255) [not null, note: 'Target Custodian Name']
+  auditee_email varchar(255) [not null]
+  auditee_department varchar(128) [default: '']
+  auditee_designation varchar(128) [default: '']
+  pst_file_name varchar(255) [not null]
+  pst_file_path varchar(512) [default: '']
+  file_size_bytes bigint [default: 0]
+  file_sha256 varchar(64) [default: '', note: 'Chain of Custody Evidence Hash']
+  status IngestionStatus [default: 'PENDING', db_index: true]
+  progress_percent float [default: 0.0]
+  current_folder varchar(255) [default: '']
+  total_messages_estimated int [default: 0]
+  processed_messages_count int [default: 0]
+  attachment_count int [default: 0]
+  error_message text [default: '']
+  processing_started_at timestamp
+  processing_completed_at timestamp
+  last_heartbeat_at timestamp [db_index: true]
+  is_cancellation_requested boolean [default: false, db_index: true]
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 }
 
 Table email_messages {
   id uuid [pk, default: `uuid4()`]
-  mailbox_id uuid [ref: > mailboxes.id]
+  mailbox_id uuid [ref: > mailbox_investigations.id, not null]
   message_id varchar(255) [db_index: true]
-  sent_at timestamp [not null, db_index: true]
-  sender varchar(255) [not null]
-  recipients_to json [note: 'Array of email strings']
-  recipients_cc json [note: 'Array of email strings']
-  recipients_bcc json [note: 'Array of email strings']
-  subject varchar(500) [not null]
-  body_text text
-  has_attachments boolean [default: false]
-  matched_keywords json [note: 'Array of flagged keywords']
-  risk_score int [default: 0]
+  subject text [default: '(No Subject)']
+  sender_name varchar(255) [default: '']
+  sender_email varchar(255) [db_index: true]
+  recipients_to json [note: 'List of To recipient strings']
+  recipients_cc json [note: 'List of CC recipient strings']
+  recipients_bcc json [note: 'List of BCC recipient strings']
+  sent_date timestamp [db_index: true]
+  delivery_date timestamp
+  folder_path varchar(512) [db_index: true]
+  body_plain text [default: '']
+  body_html text [default: '']
+  importance int [default: 1]
+  conversation_topic varchar(512) [default: '']
+  has_attachments boolean [default: false, db_index: true]
+  attachment_count int [default: 0]
+  matched_keywords json
+  risk_score int [default: 0, db_index: true]
+  risk_level varchar(16) [default: 'Low']
+  is_flagged boolean [default: false, db_index: true]
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 }
 
 Table email_attachments {
   id uuid [pk, default: `uuid4()`]
-  message_id uuid [ref: > email_messages.id]
+  email_id uuid [ref: > email_messages.id, not null]
   filename varchar(255) [not null]
-  file_size_bytes bigint [not null]
-  sha256_hash varchar(64) [not null]
-  mime_type varchar(128)
-  is_suspicious boolean [default: false]
+  file_size_bytes bigint [default: 0]
+  mime_type varchar(128) [default: 'application/octet-stream']
+  file_extension varchar(32) [default: '']
+  sha256_hash varchar(64) [db_index: true, note: 'Physical Evidence Hash']
+  storage_path varchar(512) [default: '']
+  is_suspicious boolean [default: false, db_index: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+Table email_participants {
+  id uuid [pk, default: `uuid4()`]
+  mailbox_id uuid [ref: > mailbox_investigations.id, not null]
+  email_address varchar(255) [db_index: true]
+  display_name varchar(255) [default: '']
+  sent_count int [default: 0]
+  received_count int [default: 0]
+  first_interaction timestamp
+  last_interaction timestamp
+  is_external_domain boolean [default: false]
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 }
@@ -56,40 +108,8 @@ Table email_attachments {
 
 ---
 
-## 2. Django ORM Models
+## 2. Key Forensic Database Invariants
+1. **Zero Data Loss on Cancellation:** Workers flush partial message batches atomically before marking status as `CANCELLED`.
+2. **Heartbeat Liveness Tracking:** `last_heartbeat_at` is updated at every folder and batch iteration. Tasks inactive for >180s automatically transition to `STALLED`.
+3. **Database Portability:** Fully compatible with both SQLite3 (WAL mode) for local dev and MSSQL for enterprise production.
 
-```python
-from django.db import models
-from core.models import ForensicBaseModel
-
-
-class MailboxCustodian(ForensicBaseModel):
-    custodian_name = models.CharField(max_length=255)
-    email_address = models.CharField(max_length=255)
-    pst_source_file = models.CharField(max_length=255, blank=True)
-    total_messages = models.IntegerField(default=0)
-
-
-class EmailMessage(ForensicBaseModel):
-    mailbox = models.ForeignKey(MailboxCustodian, on_delete=models.CASCADE, related_name="messages")
-    message_id = models.CharField(max_length=255, db_index=True)
-    sent_at = models.DateTimeField(db_index=True)
-    sender = models.CharField(max_length=255)
-    recipients_to = models.JSONField(default=list)
-    recipients_cc = models.JSONField(default=list)
-    recipients_bcc = models.JSONField(default=list)
-    subject = models.CharField(max_length=500)
-    body_text = models.TextField()
-    has_attachments = models.BooleanField(default=False)
-    matched_keywords = models.JSONField(default=list)
-    risk_score = models.IntegerField(default=0)
-
-
-class EmailAttachment(ForensicBaseModel):
-    message = models.ForeignKey(EmailMessage, on_delete=models.CASCADE, related_name="attachments")
-    filename = models.CharField(max_length=255)
-    file_size_bytes = models.BigIntegerField()
-    sha256_hash = models.CharField(max_length=64)
-    mime_type = models.CharField(max_length=128)
-    is_suspicious = models.BooleanField(default=False)
-```

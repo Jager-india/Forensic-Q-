@@ -100,9 +100,17 @@
                                     <div class="h-full bg-amber-500 rounded-full transition-all duration-300" style="width: {{ inv.progress_percent }}%;"></div>
                                 </div>
                             </div>
+                            {% elif inv.status == 'STALLED' %}
+                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">
+                                <i class="fa-solid fa-triangle-exclamation text-[9px]"></i> Stalled
+                            </span>
+                            {% elif inv.status == 'CANCELLED' %}
+                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border border-slate-300 dark:border-zinc-700">
+                                <i class="fa-solid fa-ban text-[9px]"></i> Cancelled
+                            </span>
                             {% elif inv.status == 'FAILED' %}
                             <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50">
-                                <i class="fa-solid fa-triangle-exclamation text-[9px]"></i> Failed
+                                <i class="fa-solid fa-circle-xmark text-[9px]"></i> Failed
                             </span>
                             {% else %}
                             <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">

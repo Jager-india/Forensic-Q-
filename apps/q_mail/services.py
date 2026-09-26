@@ -6,12 +6,13 @@ Follows agentic-django principles: pure domain workflows, atomic transactions, a
 import threading
 import uuid
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from django.conf import settings
-from django.db import transaction
+from django.db import connection, transaction
+from django.db.models import Q
 from loguru import logger
 
 from core.file_uploader import FileUploader
@@ -98,15 +99,18 @@ def start_mailbox_processing(mailbox_id: str | uuid.UUID) -> None:
     if investigation.status == MailboxInvestigation.IngestionStatus.PROCESSING:
         return
 
+    now = datetime.now(UTC)
     investigation.status = MailboxInvestigation.IngestionStatus.PROCESSING
-    investigation.progress_percent = 0.0
-    investigation.processing_started_at = datetime.now(UTC)
+    investigation.is_cancellation_requested = False
+    investigation.processing_started_at = now
+    investigation.last_heartbeat_at = now
     investigation.error_message = ""
     investigation.save(
         update_fields=[
             "status",
-            "progress_percent",
+            "is_cancellation_requested",
             "processing_started_at",
+            "last_heartbeat_at",
             "error_message",
             "updated_at",
         ]
@@ -121,29 +125,73 @@ def start_mailbox_processing(mailbox_id: str | uuid.UUID) -> None:
     worker.start()
 
 
+def cancel_mailbox_processing(mailbox_id: str | uuid.UUID) -> bool:
+    """
+    Signals the active background worker thread to safely cancel ingestion.
+    """
+    updated = MailboxInvestigation.objects.filter(
+        id=mailbox_id,
+        status=MailboxInvestigation.IngestionStatus.PROCESSING,
+    ).update(is_cancellation_requested=True)
+
+    if updated:
+        logger.info("Cancellation requested for mailbox: {}", mailbox_id)
+    return bool(updated)
+
+
+def recover_stalled_investigations(*, stale_seconds: int = 180) -> int:
+    """
+    Identifies investigations stuck in PROCESSING state where worker crashed or restarted.
+    Marks them as STALLED so the user can easily resume.
+    """
+    cutoff = datetime.now(UTC) - timedelta(seconds=stale_seconds)
+    stalled_qs = MailboxInvestigation.objects.filter(
+        status=MailboxInvestigation.IngestionStatus.PROCESSING,
+    ).filter(
+        Q(last_heartbeat_at__lt=cutoff)
+        | Q(last_heartbeat_at__isnull=True, processing_started_at__lt=cutoff)
+    )
+
+    count = stalled_qs.update(
+        status=MailboxInvestigation.IngestionStatus.STALLED,
+        error_message="Background ingestion was interrupted (server reload or worker crash). Click 'Resume Ingestion' to retry.",
+    )
+    if count > 0:
+        logger.warning("Recovered {} stalled investigation tasks.", count)
+    return count
+
+
 def _execute_pst_ingestion(mailbox_id: str) -> None:
     """
     Background worker process: streams pypff messages in batches of 250, inserts into DB.
+    Guarantees database connection cleanup and cancellation handling.
     """
     try:
         investigation = MailboxInvestigation.objects.get(id=mailbox_id)
         pst_path = Path(investigation.pst_file_path)
         attachments_dir = Path(settings.MEDIA_ROOT) / "attachments" / str(investigation.id)
 
-        # Progress tracking callback
+        # Progress & Heartbeat tracking callback
         def progress_callback(folder_name: str, processed: int, sub_count: int):
             try:
                 MailboxInvestigation.objects.filter(id=mailbox_id).update(
                     current_folder=folder_name,
                     processed_messages_count=processed,
+                    last_heartbeat_at=datetime.now(UTC),
                 )
             except Exception as e:
-                logger.debug("Failed to update investigation progress: %s", e)
+                logger.debug("Failed to update investigation progress: {}", e)
+
+        def check_cancellation() -> bool:
+            return MailboxInvestigation.objects.filter(
+                id=mailbox_id, is_cancellation_requested=True
+            ).exists()
 
         parser = PSTStreamParser(
             pst_path=pst_path,
             attachments_dir=attachments_dir,
             progress_callback=progress_callback,
+            check_cancellation_callback=check_cancellation,
         )
 
         message_batch: list[EmailMessage] = []
@@ -192,11 +240,30 @@ def _execute_pst_ingestion(mailbox_id: str) -> None:
                 message_batch.clear()
                 attachment_map.clear()
 
-                # Update progress
+                # Update progress & heartbeat
                 MailboxInvestigation.objects.filter(id=mailbox_id).update(
                     processed_messages_count=parser.total_messages_processed,
                     attachment_count=total_attachments,
+                    last_heartbeat_at=datetime.now(UTC),
                 )
+
+        # Check if parser was cancelled
+        if parser.is_cancelled or check_cancellation():
+            if message_batch:
+                total_attachments += _flush_message_batch(
+                    investigation, message_batch, attachment_map
+                )
+            _build_participants(investigation, counterparty_counts)
+
+            MailboxInvestigation.objects.filter(id=mailbox_id).update(
+                status=MailboxInvestigation.IngestionStatus.CANCELLED,
+                error_message="Ingestion cancelled by investigator.",
+                processed_messages_count=parser.total_messages_processed,
+                attachment_count=total_attachments,
+                processing_completed_at=datetime.now(UTC),
+            )
+            logger.info("PST Ingestion cancelled for mailbox: {}", mailbox_id)
+            return
 
         # Flush remaining batch
         if message_batch:
@@ -212,15 +279,20 @@ def _execute_pst_ingestion(mailbox_id: str) -> None:
             processed_messages_count=parser.total_messages_processed,
             attachment_count=total_attachments,
             processing_completed_at=datetime.now(UTC),
+            last_heartbeat_at=datetime.now(UTC),
         )
-        logger.info("PST Ingestion completed for mailbox: %s", mailbox_id)
+        logger.info("PST Ingestion completed for mailbox: {}", mailbox_id)
 
     except Exception as e:
-        logger.exception("PST Ingestion failed for mailbox: %s", mailbox_id)
+        logger.exception("PST Ingestion failed for mailbox: {}", mailbox_id)
         MailboxInvestigation.objects.filter(id=mailbox_id).update(
             status=MailboxInvestigation.IngestionStatus.FAILED,
             error_message=str(e),
+            last_heartbeat_at=datetime.now(UTC),
         )
+    finally:
+        # Prevent thread connection leak
+        connection.close()
 
 
 @transaction.atomic

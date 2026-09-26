@@ -53,11 +53,14 @@ class PSTStreamParser:
         pst_path: Path | str,
         attachments_dir: Path | str | None = None,
         progress_callback: Callable[[str, int, int], None] | None = None,
+        check_cancellation_callback: Callable[[], bool] | None = None,
     ):
         self.pst_path = Path(pst_path)
         self.attachments_dir = Path(attachments_dir) if attachments_dir else None
         self.progress_callback = progress_callback
+        self.check_cancellation_callback = check_cancellation_callback
         self.total_messages_processed = 0
+        self.is_cancelled = False
 
     def parse_messages(self) -> Iterator[ParsedEmail]:
         """
@@ -78,8 +81,15 @@ class PSTStreamParser:
 
     def _traverse_folder(self, folder: Any, current_path: str) -> Iterator[ParsedEmail]:
         """
-        Recursively processes folder messages and sub-folders.
+        Recursively processes folder messages and sub-folders with cancellation checks.
         """
+        if self.is_cancelled or (
+            self.check_cancellation_callback and self.check_cancellation_callback()
+        ):
+            self.is_cancelled = True
+            logger.info("PST Stream parser received cancellation signal during traversal.")
+            return
+
         folder_name = folder.get_name() or "Root"
         full_path = f"{current_path}/{folder_name}".strip("/")
 
@@ -90,6 +100,13 @@ class PSTStreamParser:
 
         # Process all messages in current folder
         for i in range(num_sub_messages):
+            if self.is_cancelled or (
+                self.check_cancellation_callback and self.check_cancellation_callback()
+            ):
+                self.is_cancelled = True
+                logger.info("PST Stream parser aborted message loop on cancellation request.")
+                return
+
             try:
                 message = folder.get_sub_message(i)
                 if message:
@@ -103,6 +120,12 @@ class PSTStreamParser:
         # Recurse into sub-folders
         num_sub_folders = folder.get_number_of_sub_folders()
         for j in range(num_sub_folders):
+            if self.is_cancelled or (
+                self.check_cancellation_callback and self.check_cancellation_callback()
+            ):
+                self.is_cancelled = True
+                return
+
             try:
                 sub_folder = folder.get_sub_folder(j)
                 if sub_folder:

@@ -14,6 +14,11 @@ urlpatterns = [
         views.trigger_processing_view,
         name="trigger_process",
     ),
+    path(
+        "investigation/<uuid:mailbox_id>/cancel/",
+        views.cancel_processing_view,
+        name="cancel_process",
+    ),
     path("investigation/<uuid:mailbox_id>/progress/", views.progress_api_view, name="progress_api"),
     path("investigation/<uuid:mailbox_id>/messages/", views.messages_api_view, name="messages_api"),
     path("email/<uuid:email_id>/", views.email_detail_api_view, name="email_detail"),
