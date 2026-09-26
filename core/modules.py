@@ -52,14 +52,14 @@ DEFAULT_MODULE_SPECS = {
         "num": "04",
         "category": "DESKTOP",
         "name": "Scan",
-        "tag": "BUILDING",
+        "tag": "LIVE",
         "accent": "teal",
         "tagline": "Walks drives. Highlights hits.",
         "features": [
             "Relevant files, keyword hits",
             "Evidence locations across the workstation",
         ],
-        "href": "/demo/tabulator/",
+        "href": "/scan/",
         "order": 4,
     },
     "q_verify": {

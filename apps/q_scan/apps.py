@@ -10,12 +10,12 @@ class QScanConfig(AppConfig):
     module_num = "04"
     module_category = "DESKTOP"
     module_name = "Scan"
-    module_tag = "BUILDING"
+    module_tag = "LIVE"
     module_accent = "teal"
     module_tagline = "Walks drives. Highlights hits."
     module_features = [
         "Relevant files, keyword hits",
         "Evidence locations across the workstation",
     ]
-    module_url = "/demo/tabulator/"
+    module_url = "/scan/"
     module_order = 4

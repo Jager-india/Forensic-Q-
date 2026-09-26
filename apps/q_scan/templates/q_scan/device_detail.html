@@ -1,0 +1,169 @@
+<c-base title="Q-Scan | Endpoint Audit: {{ device.hostname }}">
+
+    <!-- Page Header with Back Link -->
+    <c-page_header 
+        title="Endpoint Audit &bull; {{ device.hostname }}" 
+        subtitle="Forensic evidence breakdown for {{ device.scan_title|default:'Endpoint Investigation' }}." 
+        icon="fa-solid fa-desktop"
+        icon_color="text-teal-400"
+        category="Desktop Forensics" 
+        section="Endpoint Triage">
+        
+        <div class="flex items-center gap-2">
+            <a href="{% url 'q_scan:dashboard' %}" 
+               class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to All Endpoints</span>
+            </a>
+
+            <a href="{% url 'q_scan:export_csv' %}?device_id={{ device.id }}" 
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-lg shadow-teal-600/20 transition-all">
+                <i class="fa-solid fa-file-export"></i>
+                <span>Export Device Hits (CSV)</span>
+            </a>
+        </div>
+    </c-page_header>
+
+    <!-- Device Overview Card -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <c-stat_card 
+            title="Host Machine" 
+            value="{{ device.hostname }}" 
+            subtitle="Custodian: {{ device.custodian_name|default:'Unassigned' }}" 
+            icon="fa-solid fa-laptop-code" 
+            variant="slate" />
+
+        <c-stat_card 
+            title="Total Evidence Hits" 
+            value="{{ total_hits }}" 
+            subtitle="Matched Keyword Findings" 
+            icon="fa-solid fa-magnifying-glass" 
+            variant="teal" />
+
+        <c-stat_card 
+            title="Drive Letter" 
+            value="{{ device.drive_letter|default:'C:\\' }}" 
+            subtitle="File System: {{ device.file_system|default:'NTFS' }}" 
+            icon="fa-solid fa-hard-drive" 
+            variant="amber" />
+
+        <c-stat_card 
+            title="Audit Status" 
+            value="{{ device.status }}" 
+            subtitle="Imported {{ device.created_at|date:'Y-m-d' }}" 
+            icon="fa-solid fa-shield-check" 
+            variant="emerald" />
+    </div>
+
+    <!-- Evidence Hits Table -->
+    <c-card title="Evidence Findings for {{ device.hostname }}" subtitle="Granular list of matched keywords, file paths, and context snippets." icon="fa-solid fa-file-shield" icon_color="text-teal-400">
+        <div class="mb-4 flex flex-wrap items-center gap-3">
+            <div class="relative flex-1 min-w-[240px]">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                <input type="text" id="device-search" placeholder="Search filenames, keywords, snippets..." 
+                       class="w-full pl-8 pr-4 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-teal-500">
+            </div>
+
+            <button id="device-clear-filter" class="px-3 py-1.5 text-xs rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors cursor-pointer">
+                Reset Filter
+            </button>
+        </div>
+
+        <div id="device-hits-table" class="min-h-[420px] rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800"></div>
+    </c-card>
+
+    <script>
+        const tableData = {{ table_data_json|safe }};
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const table = new Tabulator("#device-hits-table", {
+                data: tableData,
+                layout: "fitColumns",
+                responsiveLayout: "collapse",
+                pagination: "local",
+                paginationSize: 20,
+                paginationSizeSelector: [10, 20, 50, 100],
+                placeholder: "No evidence hits found for this device",
+                initialSort: [{ column: "risk_score", dir: "desc" }],
+                columns: [
+                    {
+                        title: "Risk",
+                        field: "risk_score",
+                        width: 85,
+                        formatter: function (cell) {
+                            const val = cell.getValue();
+                            let badgeClass = "bg-slate-500/10 text-slate-400 border-slate-500/20";
+                            if (val >= 70) badgeClass = "bg-rose-500/10 text-rose-400 border-rose-500/30";
+                            else if (val >= 40) badgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/30";
+                            return `<span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${badgeClass}">${val}</span>`;
+                        }
+                    },
+                    {
+                        title: "Keyword",
+                        field: "matched_keyword",
+                        width: 140,
+                        formatter: function (cell) {
+                            return `<span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-teal-500/15 text-teal-400 border border-teal-500/30">${cell.getValue()}</span>`;
+                        }
+                    },
+                    {
+                        title: "Match Type",
+                        field: "match_type_label",
+                        width: 140,
+                        formatter: function (cell) {
+                            return `<span class="text-[11px] font-mono text-slate-400">${cell.getValue()}</span>`;
+                        }
+                    },
+                    {
+                        title: "Filename",
+                        field: "filename",
+                        width: 180,
+                        formatter: function (cell) {
+                            return `<span class="font-mono text-xs text-slate-700 dark:text-zinc-300 font-semibold" title="${cell.getRow().getData().file_path}">${cell.getValue()}</span>`;
+                        }
+                    },
+                    {
+                        title: "Size",
+                        field: "file_size_display",
+                        width: 100
+                    },
+                    {
+                        title: "Context Snippet",
+                        field: "snippet",
+                        formatter: function (cell) {
+                            const snippet = cell.getValue();
+                            if (!snippet || snippet === "-") return `<span class="text-slate-500 font-mono text-[11px]">-</span>`;
+                            return `<span class="text-[11px] font-mono text-slate-600 dark:text-zinc-400 truncate block" title="${snippet.replace(/"/g, '&quot;')}">${snippet}</span>`;
+                        }
+                    },
+                    {
+                        title: "Modified Date",
+                        field: "file_modified_at",
+                        width: 130,
+                        formatter: function (cell) {
+                            return `<span class="text-[11px] font-mono text-slate-400">${cell.getValue()}</span>`;
+                        }
+                    }
+                ]
+            });
+
+            document.getElementById("device-search").addEventListener("input", function (e) {
+                const term = e.target.value.toLowerCase();
+                table.setFilter(function (data) {
+                    if (!term) return true;
+                    return (
+                        (data.filename && data.filename.toLowerCase().includes(term)) ||
+                        (data.file_path && data.file_path.toLowerCase().includes(term)) ||
+                        (data.matched_keyword && data.matched_keyword.toLowerCase().includes(term)) ||
+                        (data.snippet && data.snippet.toLowerCase().includes(term))
+                    );
+                });
+            });
+
+            document.getElementById("device-clear-filter").addEventListener("click", function () {
+                document.getElementById("device-search").value = "";
+                table.clearFilter();
+            });
+        });
+    </script>
+</c-base>
