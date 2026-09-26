@@ -1,0 +1,178 @@
+"""
+Q-Verify Read-Only Selectors Layer
+Follows agentic-django principles: zero DB mutations, proactive N+1 elimination, and remote Tabulator pagination.
+"""
+
+import uuid
+from typing import Any
+
+from django.core.paginator import Paginator
+from django.db.models import Avg, Count, Q, QuerySet
+from django.shortcuts import get_object_or_404
+
+from .models import VerificationCase, VerifiedDocument
+
+
+def list_verification_cases() -> QuerySet[VerificationCase]:
+    """
+    Returns all verification cases ordered by creation date.
+    """
+    return VerificationCase.objects.all().order_by("-created_at")
+
+
+def get_verification_case(case_id: str | uuid.UUID) -> VerificationCase:
+    """
+    Retrieves a single verification case.
+    """
+    return get_object_or_404(VerificationCase, id=case_id)
+
+
+def get_global_verification_stats() -> dict[str, Any]:
+    """
+    Calculates high-level metrics across all cases and verified documents for the dashboard.
+    """
+    doc_stats = VerifiedDocument.objects.aggregate(
+        total_docs=Count("id"),
+        suspicious_docs=Count("id", filter=Q(risk_level=VerifiedDocument.RiskLevel.SUSPICIOUS)),
+        tampered_docs=Count(
+            "id", filter=Q(risk_level=VerifiedDocument.RiskLevel.HIGH_RISK_TAMPERED)
+        ),
+        avg_score=Avg("authenticity_score"),
+    )
+    total_cases = VerificationCase.objects.count()
+
+    return {
+        "total_cases": total_cases,
+        "total_docs": doc_stats["total_docs"] or 0,
+        "suspicious_docs": doc_stats["suspicious_docs"] or 0,
+        "tampered_docs": doc_stats["tampered_docs"] or 0,
+        "avg_score": round(doc_stats["avg_score"] or 100.0, 1),
+    }
+
+
+def get_case_summary_metrics(case_id: str | uuid.UUID) -> dict[str, Any]:
+    """
+    Retrieves case details, document counts, and risk distribution for Plotly charts.
+    """
+    case = get_object_or_404(VerificationCase, id=case_id)
+    docs = VerifiedDocument.objects.filter(case=case)
+
+    risk_counts = {
+        "Authentic": docs.filter(risk_level=VerifiedDocument.RiskLevel.AUTHENTIC).count(),
+        "Suspicious": docs.filter(risk_level=VerifiedDocument.RiskLevel.SUSPICIOUS).count(),
+        "High Risk / Tampered": docs.filter(
+            risk_level=VerifiedDocument.RiskLevel.HIGH_RISK_TAMPERED
+        ).count(),
+    }
+
+    software_dist = list(
+        docs.exclude(meta_software="")
+        .values("meta_software")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:6]
+    )
+
+    return {
+        "case": case,
+        "total_documents": case.total_documents,
+        "authentic_count": case.authentic_count,
+        "suspicious_count": case.suspicious_count,
+        "tampered_count": case.tampered_count,
+        "average_authenticity_score": case.average_authenticity_score,
+        "risk_distribution": risk_counts,
+        "top_software": software_dist,
+    }
+
+
+def get_paginated_verified_documents(
+    case_id: str | uuid.UUID | None = None,
+    *,
+    page: int = 1,
+    page_size: int = 25,
+    search: str = "",
+    risk_level: str = "",
+    mime_type: str = "",
+    sort_field: str = "authenticity_score",
+    sort_dir: str = "asc",
+) -> dict[str, Any]:
+    """
+    Server-side paginated selector for Tabulator.js document grid.
+    """
+    qs = VerifiedDocument.objects.all()
+    if case_id:
+        qs = qs.filter(case_id=case_id)
+
+    if search:
+        qs = qs.filter(
+            Q(filename__icontains=search)
+            | Q(meta_author__icontains=search)
+            | Q(meta_software__icontains=search)
+            | Q(meta_producer__icontains=search)
+            | Q(sha256_hash__icontains=search)
+        )
+
+    if risk_level:
+        qs = qs.filter(risk_level=risk_level)
+
+    if mime_type:
+        qs = qs.filter(mime_type__icontains=mime_type)
+
+    allowed_sort_fields = {
+        "score": "authenticity_score",
+        "authenticity_score": "authenticity_score",
+        "filename": "filename",
+        "meta_created_at": "meta_created_at",
+        "meta_modified_at": "meta_modified_at",
+        "file_size_bytes": "file_size_bytes",
+        "risk_level": "risk_level",
+    }
+    db_sort_field = allowed_sort_fields.get(sort_field, "authenticity_score")
+    order_prefix = "-" if sort_dir.lower() == "desc" else ""
+    qs = qs.order_by(f"{order_prefix}{db_sort_field}", "-created_at")
+
+    paginator = Paginator(qs, max(1, min(page_size, 500)))
+    page_obj = paginator.get_page(page)
+
+    rows = []
+    for d in page_obj.object_list:
+        rows.append(
+            {
+                "id": str(d.id),
+                "filename": d.filename,
+                "file_extension": d.file_extension,
+                "formatted_size": d.formatted_size,
+                "sha256_hash": d.sha256_hash,
+                "meta_created_at": (
+                    d.meta_created_at.strftime("%Y-%m-%d %H:%M UTC") if d.meta_created_at else "N/A"
+                ),
+                "meta_modified_at": (
+                    d.meta_modified_at.strftime("%Y-%m-%d %H:%M UTC")
+                    if d.meta_modified_at
+                    else "N/A"
+                ),
+                "meta_author": d.meta_author or "Unknown",
+                "meta_software": d.meta_software or "Unknown",
+                "authenticity_score": d.authenticity_score,
+                "risk_level": d.risk_level,
+                "has_timestamp_anomaly": d.has_timestamp_anomaly,
+                "has_software_anomaly": d.has_software_anomaly,
+                "has_structural_anomaly": d.has_structural_anomaly,
+                "anomaly_count": len(d.anomalies),
+                "summary": d.summary,
+            }
+        )
+
+    return {
+        "data": rows,
+        "last_page": paginator.num_pages,
+        "last_row": paginator.count,
+        "total_count": paginator.count,
+        "current_page": page_obj.number,
+    }
+
+
+def get_verified_document_detail(doc_id: str | uuid.UUID) -> VerifiedDocument:
+    """
+    Retrieves full details and raw metadata tree for a document.
+    """
+    return get_object_or_404(VerifiedDocument.objects.select_related("case"), id=doc_id)

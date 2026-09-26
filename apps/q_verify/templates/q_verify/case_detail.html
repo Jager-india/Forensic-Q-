@@ -1,0 +1,477 @@
+<c-base title="{{ case.case_ref }} | Q-Verify Workstation">
+
+    <!-- Page Header with Breadcrumb & Back Link -->
+    <c-page_header 
+        title="{{ case.case_title }}" 
+        subtitle="{{ case.case_ref }} &bull; Custodian: {{ case.custodian_name }}{% if case.custodian_department %} ({{ case.custodian_department }}){% endif %}" 
+        icon="fa-solid fa-stamp"
+        icon_color="text-rose-400"
+        category="Q-Verify" 
+        section="Case Workstation">
+        
+        <a href="{% url 'q_verify:dashboard' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 transition">
+            <i class="fa-solid fa-arrow-left text-[10px]"></i>
+            <span>All Verification Cases</span>
+        </a>
+    </c-page_header>
+
+    <!-- Top KPI Stat Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <c-stat_card 
+            title="Documents in Case" 
+            value="{{ case.total_documents }}" 
+            subtitle="Analyzed Files" 
+            icon="fa-solid fa-files" 
+            variant="slate" />
+            
+        <c-stat_card 
+            title="Authentic Documents" 
+            value="{{ case.authentic_count }}" 
+            subtitle="Clean Metadata (Score &ge; 80)" 
+            icon="fa-solid fa-circle-check" 
+            variant="emerald" />
+            
+        <c-stat_card 
+            title="Suspicious / Flagged" 
+            value="{{ case.suspicious_count }}" 
+            subtitle="Discrepancy Inconsistencies" 
+            icon="fa-solid fa-triangle-exclamation" 
+            variant="amber" />
+            
+        <c-stat_card 
+            title="Tampered / High Risk" 
+            value="{{ case.tampered_count }}" 
+            subtitle="Critical Anomalies (Score &lt; 50)" 
+            icon="fa-solid fa-ban" 
+            variant="rose" />
+    </div>
+
+    <!-- Analytics & Batch Upload Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Plotly Chart -->
+        <div class="lg:col-span-1">
+            <c-card title="Risk Distribution" subtitle="Authenticity score breakdown." icon="fa-solid fa-chart-pie" icon_color="text-rose-400">
+                {% if chart_html %}
+                    {{ chart_html|safe }}
+                {% else %}
+                    <div class="py-12 text-center text-slate-400 text-xs font-mono">Upload documents to generate risk distribution chart.</div>
+                {% endif %}
+            </c-card>
+        </div>
+
+        <!-- Batch Drag-and-Drop Ingestion Dropzone -->
+        <div class="lg:col-span-2">
+            <c-card title="Batch Document Ingestion" subtitle="Drag and drop multiple contracts, invoices, or images to verify against this case." icon="fa-solid fa-cloud-arrow-up" icon_color="text-rose-400">
+                <div id="batch-drop-zone" class="border-2 border-dashed border-slate-300 dark:border-zinc-700 hover:border-rose-500 dark:hover:border-rose-500 rounded-xl p-6 text-center cursor-pointer transition-colors bg-slate-50/50 dark:bg-zinc-800/30"
+                     onclick="document.getElementById('batch-file-input').click()">
+                    <input type="file" id="batch-file-input" multiple accept=".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png,.tiff" class="hidden" onchange="handleBatchUpload(event)">
+                    <i class="fa-solid fa-file-arrow-up text-3xl text-rose-500 mb-2 block"></i>
+                    <p id="batch-drop-text" class="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                        Click or Drag & Drop multiple documents here to ingest
+                    </p>
+                    <p class="text-[11px] text-slate-400 dark:text-zinc-500 mt-0.5 font-mono">
+                        Automatic format detection (PDF, Office DOCX/XLSX, JPEG/PNG EXIF)
+                    </p>
+                </div>
+
+                <!-- Batch Upload Progress Bar -->
+                <div id="batch-progress" class="hidden mt-3 space-y-1">
+                    <div class="flex justify-between text-xs font-mono text-rose-500 font-bold">
+                        <span id="batch-status-text"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Ingesting documents...</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-rose-600 rounded-full animate-pulse" style="width: 100%;"></div>
+                    </div>
+                </div>
+            </c-card>
+        </div>
+    </div>
+
+    <!-- Filter Toolbar -->
+    <div class="mb-4 p-4 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-3 flex-1">
+            <div class="relative flex-1 min-w-[220px]">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="search-input" placeholder="Search filename, author, software, hash..." 
+                       class="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-rose-500 transition">
+            </div>
+
+            <select id="risk-select"
+                    class="px-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-rose-500 transition">
+                <option value="">All Risk Levels</option>
+                <option value="AUTHENTIC">Authentic (Score &ge; 80)</option>
+                <option value="SUSPICIOUS">Suspicious (50 - 79)</option>
+                <option value="HIGH_RISK_TAMPERED">High Risk / Tampered (&lt; 50)</option>
+            </select>
+
+            <button type="button" onclick="resetFilters()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 transition">
+                Reset
+            </button>
+        </div>
+
+        <div class="text-xs font-mono text-slate-400 dark:text-zinc-500">
+            Click any row to open the Forensic Inspector drawer
+        </div>
+    </div>
+
+    <!-- Tabulator.js Evidence Data Grid -->
+    <div class="mb-8">
+        <div id="documents-table" class="rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 shadow-sm"></div>
+    </div>
+
+    <!-- Slide-Over Forensic Reader Drawer -->
+    <div id="document-reader-drawer" class="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-white dark:bg-[#141519] border-l border-slate-200 dark:border-zinc-800 shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col">
+        
+        <!-- Drawer Header -->
+        <div class="p-5 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between">
+            <div>
+                <span class="text-[10px] font-mono uppercase tracking-widest text-rose-400 font-bold">Document Forensic Inspector</span>
+                <h3 id="drawer-filename" class="text-base font-bold text-slate-900 dark:text-white mt-0.5 line-clamp-1">Filename</h3>
+            </div>
+            <button onclick="closeDocDrawer()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800 transition">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Drawer Content Body -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+            
+            <!-- Authenticity Gauge Card -->
+            <div id="drawer-gauge-card" class="p-4 rounded-xl border flex items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="text-center">
+                        <div id="drawer-score" class="text-3xl font-black font-mono">100</div>
+                        <div class="text-[10px] font-mono text-slate-400 dark:text-zinc-500 uppercase">Score / 100</div>
+                    </div>
+                    <div>
+                        <div id="drawer-risk-badge" class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-mono font-bold uppercase mb-1">
+                            AUTHENTIC
+                        </div>
+                        <p id="drawer-summary" class="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Side-by-Side Timestamp Forensic Matrix -->
+            <div class="space-y-2">
+                <h4 class="font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <i class="fa-solid fa-clock text-rose-400"></i>
+                    <span>Timestamp Forensic Comparison</span>
+                </h4>
+                <div class="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800/80 space-y-2 font-mono text-[11px]">
+                    <div class="flex justify-between"><span class="text-slate-400 dark:text-zinc-500">Embedded Creation Date:</span><span id="drawer-meta-created" class="font-bold text-slate-800 dark:text-zinc-200"></span></div>
+                    <div class="flex justify-between"><span class="text-slate-400 dark:text-zinc-500">Embedded Modification Date:</span><span id="drawer-meta-modified" class="font-bold text-slate-800 dark:text-zinc-200"></span></div>
+                    <div class="flex justify-between border-t border-slate-200 dark:border-zinc-800 pt-1.5"><span class="text-slate-400 dark:text-zinc-500">Filesystem Timestamp:</span><span id="drawer-fs-modified" class="text-slate-600 dark:text-zinc-400"></span></div>
+                </div>
+            </div>
+
+            <!-- Author & Software Signatures -->
+            <div class="space-y-2">
+                <h4 class="font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <i class="fa-solid fa-fingerprint text-rose-400"></i>
+                    <span>Author & Software Signatures</span>
+                </h4>
+                <div class="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800/80 space-y-2 font-mono text-[11px]">
+                    <div class="flex justify-between"><span class="text-slate-400 dark:text-zinc-500">Author / Creator:</span><span id="drawer-author" class="font-bold text-slate-800 dark:text-zinc-200"></span></div>
+                    <div class="flex justify-between"><span class="text-slate-400 dark:text-zinc-500">Software Generator:</span><span id="drawer-software" class="text-rose-400 font-bold"></span></div>
+                    <div id="drawer-pdf-revisions-row" class="flex justify-between hidden"><span class="text-slate-400 dark:text-zinc-500">Incremental Revisions (PDF):</span><span id="drawer-pdf-revisions" class="text-amber-500 font-bold"></span></div>
+                    <div id="drawer-office-edittime-row" class="flex justify-between hidden"><span class="text-slate-400 dark:text-zinc-500">Total Editing Time (Office):</span><span id="drawer-office-edittime" class="text-slate-700 dark:text-zinc-300"></span></div>
+                    <div class="flex justify-between border-t border-slate-200 dark:border-zinc-800 pt-1.5"><span class="text-slate-400 dark:text-zinc-500">Evidence SHA-256:</span><span id="drawer-sha256" class="text-[10px] truncate max-w-[280px]"></span></div>
+                </div>
+            </div>
+
+            <!-- Detected Anomalies List -->
+            <div id="drawer-anomalies-section" class="space-y-2 hidden">
+                <h4 class="font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
+                    <span>Detected Anomalies (<span id="drawer-anomalies-count">0</span>)</span>
+                </h4>
+                <div id="drawer-anomalies-list" class="space-y-2"></div>
+            </div>
+
+            <!-- Raw Metadata Dictionary Tree -->
+            <div class="space-y-2">
+                <h4 class="font-bold text-slate-800 dark:text-zinc-200 flex items-center justify-between">
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-code text-rose-400"></i> Raw Extracted Metadata</span>
+                </h4>
+                <pre id="drawer-raw-json" class="p-4 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800 text-[11px] font-mono text-slate-700 dark:text-zinc-300 overflow-x-auto max-h-[220px]"></pre>
+            </div>
+
+            <!-- Download Button -->
+            <div class="pt-2">
+                <a id="drawer-download-link" href="#" class="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md shadow-rose-600/20">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Download Original Evidence Document</span>
+                </a>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Background Drawer Backdrop -->
+    <div id="drawer-backdrop" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 hidden transition-opacity" onclick="closeDocDrawer()"></div>
+
+    <!-- Tabulator Table & Ingestion Script -->
+    <script>
+        let table = null;
+        let debounceTimer = null;
+
+        function applyFilters() {
+            if (table) table.setData();
+        }
+
+        function resetFilters() {
+            const search = document.getElementById('search-input');
+            const risk = document.getElementById('risk-select');
+            if (search) search.value = '';
+            if (risk) risk.value = '';
+            applyFilters();
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            // Live Search
+            document.getElementById('search-input')?.addEventListener('input', function() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(applyFilters, 300);
+            });
+
+            // Instant Risk Filter
+            document.getElementById('risk-select')?.addEventListener('change', function() {
+                applyFilters();
+            });
+
+            // Tabulator Grid Initialization
+            table = new Tabulator("#documents-table", {
+                ajaxURL: "{% url 'q_verify:documents_grid_api' case.id %}",
+                ajaxConfig: "GET",
+                ajaxParams: function() {
+                    return {
+                        search: document.getElementById('search-input')?.value || '',
+                        risk_level: document.getElementById('risk-select')?.value || '',
+                    };
+                },
+                pagination: true,
+                paginationMode: "remote",
+                paginationSize: 25,
+                paginationSizeSelector: [25, 50, 100],
+                sortMode: "remote",
+                layout: "fitColumns",
+                responsiveLayout: "collapse",
+                placeholder: "No verified documents in this case. Drag and drop files above to analyze.",
+                columns: [
+                    { 
+                        title: "Document Filename", 
+                        field: "filename", 
+                        minWidth: 220,
+                        headerSort: true,
+                        formatter: function(cell) {
+                            return `<div class="font-bold text-slate-900 dark:text-white">${cell.getValue()}</div><div class="text-[10px] font-mono text-slate-400">${cell.getData().formatted_size}</div>`;
+                        }
+                    },
+                    { 
+                        title: "Embedded Creation Date", 
+                        field: "meta_created_at", 
+                        width: 170,
+                        headerSort: true,
+                        formatter: function(cell) {
+                            return `<span class="font-mono text-xs text-slate-700 dark:text-zinc-300">${cell.getValue()}</span>`;
+                        }
+                    },
+                    { 
+                        title: "Author / Software", 
+                        field: "meta_software", 
+                        minWidth: 180,
+                        headerSort: false,
+                        formatter: function(cell) {
+                            const data = cell.getData();
+                            return `<div class="text-slate-800 dark:text-zinc-200 font-medium truncate">${data.meta_software}</div><div class="text-[10px] text-slate-400 truncate">${data.meta_author}</div>`;
+                        }
+                    },
+                    { 
+                        title: "Authenticity Score", 
+                        field: "authenticity_score", 
+                        width: 140,
+                        hozAlign: "center",
+                        headerSort: true,
+                        formatter: function(cell) {
+                            const val = cell.getValue();
+                            const isAuth = val >= 80;
+                            const isSusp = val >= 50 && val < 80;
+                            const badgeColor = isAuth ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50' : (isSusp ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/50' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50');
+                            return `<span class="px-2.5 py-1 rounded-full text-xs font-mono font-bold border ${badgeColor}">${val}/100</span>`;
+                        }
+                    },
+                    { 
+                        title: "Risk Level", 
+                        field: "risk_level", 
+                        width: 130,
+                        hozAlign: "center",
+                        headerSort: true,
+                        formatter: function(cell) {
+                            const val = cell.getValue();
+                            const isAuth = val === 'AUTHENTIC';
+                            const isSusp = val === 'SUSPICIOUS';
+                            const color = isAuth ? 'text-emerald-500' : (isSusp ? 'text-amber-500' : 'text-rose-500');
+                            return `<span class="font-mono text-[11px] font-bold ${color}">${val}</span>`;
+                        }
+                    },
+                    { 
+                        title: "Action", 
+                        width: 90, 
+                        hozAlign: "center",
+                        headerSort: false,
+                        formatter: function(cell) {
+                            return `<button class="px-2.5 py-1 rounded bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-600 hover:text-white text-rose-600 dark:text-rose-400 text-[10px] font-bold transition cursor-pointer">Inspect</button>`;
+                        }
+                    }
+                ]
+            });
+
+            table.on("rowClick", function(e, row) {
+                openDocDrawer(row.getData().id);
+            });
+
+            // Batch Drag and Drop Zone Setup
+            const batchZone = document.getElementById('batch-drop-zone');
+            if (batchZone) {
+                batchZone.addEventListener('dragover', (e) => { e.preventDefault(); batchZone.classList.add('border-rose-500', 'bg-rose-50/20'); });
+                batchZone.addEventListener('dragleave', (e) => { e.preventDefault(); batchZone.classList.remove('border-rose-500', 'bg-rose-50/20'); });
+                batchZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    batchZone.classList.remove('border-rose-500', 'bg-rose-50/20');
+                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        handleBatchUpload({ target: { files: e.dataTransfer.files } });
+                    }
+                });
+            }
+        });
+
+        async function handleBatchUpload(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+
+            const progressEl = document.getElementById('batch-progress');
+            progressEl.classList.remove('hidden');
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append("files", files[i]);
+            }
+
+            try {
+                const res = await fetch("{% url 'q_verify:case_upload' case.id %}", {
+                    method: "POST",
+                    body: formData,
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    alert("Batch upload failed.");
+                    progressEl.classList.add('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Network error during batch upload.");
+                progressEl.classList.add('hidden');
+            }
+        }
+
+        async function openDocDrawer(docId) {
+            const drawer = document.getElementById('document-reader-drawer');
+            const backdrop = document.getElementById('drawer-backdrop');
+
+            const res = await fetch(`/verify/document/${docId}/`);
+            if (!res.ok) {
+                alert("Failed to load document details.");
+                return;
+            }
+
+            const data = await res.json();
+
+            document.getElementById('drawer-filename').innerText = data.filename;
+            document.getElementById('drawer-score').innerText = data.authenticity_score;
+            document.getElementById('drawer-summary').innerText = data.summary;
+            document.getElementById('drawer-meta-created').innerText = data.meta_created_at;
+            document.getElementById('drawer-meta-modified').innerText = data.meta_modified_at;
+            document.getElementById('drawer-fs-modified').innerText = data.file_modified_at;
+            document.getElementById('drawer-author').innerText = data.meta_author;
+            document.getElementById('drawer-software').innerText = data.meta_software;
+            document.getElementById('drawer-sha256').innerText = data.sha256_hash;
+
+            // Gauge Styling
+            const isAuth = data.authenticity_score >= 80;
+            const isSusp = data.authenticity_score >= 50 && data.authenticity_score < 80;
+            const gaugeCard = document.getElementById('drawer-gauge-card');
+            const scoreEl = document.getElementById('drawer-score');
+            const badgeEl = document.getElementById('drawer-risk-badge');
+
+            gaugeCard.className = `p-4 rounded-xl border ${isAuth ? 'bg-emerald-500/10 border-emerald-500/30' : (isSusp ? 'bg-amber-500/10 border-amber-500/30' : 'bg-rose-500/10 border-rose-500/30')}`;
+            scoreEl.className = `text-3xl font-black font-mono ${isAuth ? 'text-emerald-500' : (isSusp ? 'text-amber-500' : 'text-rose-500')}`;
+            badgeEl.className = `inline-flex px-2.5 py-0.5 rounded-full text-xs font-mono font-bold uppercase mb-1 ${isAuth ? 'bg-emerald-500 text-white' : (isSusp ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white')}`;
+            badgeEl.innerText = data.risk_level;
+
+            // Incremental / Edit time
+            const pdfRevRow = document.getElementById('drawer-pdf-revisions-row');
+            if (data.incremental_updates_count > 0) {
+                pdfRevRow.classList.remove('hidden');
+                document.getElementById('drawer-pdf-revisions').innerText = `${data.incremental_updates_count} appended revision(s)`;
+            } else {
+                pdfRevRow.classList.add('hidden');
+            }
+
+            const editTimeRow = document.getElementById('drawer-office-edittime-row');
+            if (data.editing_time_minutes > 0) {
+                editTimeRow.classList.remove('hidden');
+                document.getElementById('drawer-office-edittime').innerText = `${data.editing_time_minutes} minutes`;
+            } else {
+                editTimeRow.classList.add('hidden');
+            }
+
+            // Anomalies List
+            const anomSection = document.getElementById('drawer-anomalies-section');
+            const anomList = document.getElementById('drawer-anomalies-list');
+            anomList.innerHTML = '';
+
+            if (data.anomalies && data.anomalies.length > 0) {
+                anomSection.classList.remove('hidden');
+                document.getElementById('drawer-anomalies-count').innerText = data.anomalies.length;
+                data.anomalies.forEach(a => {
+                    const item = document.createElement('div');
+                    item.className = "p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/80 border border-slate-200 dark:border-zinc-800 text-[11px] flex items-start gap-2.5";
+                    item.innerHTML = `
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-rose-50 dark:bg-rose-950/60 text-rose-500 flex-shrink-0 mt-0.5">${a.severity}</span>
+                        <div>
+                            <span class="font-bold text-slate-800 dark:text-zinc-200">${a.title}</span>
+                            <p class="text-slate-600 dark:text-zinc-400 mt-0.5 leading-relaxed">${a.description}</p>
+                        </div>
+                    `;
+                    anomList.appendChild(item);
+                });
+            } else {
+                anomSection.classList.add('hidden');
+            }
+
+            // Raw JSON
+            document.getElementById('drawer-raw-json').innerText = JSON.stringify(data.raw_metadata, null, 2);
+
+            // Download link
+            const dlLink = document.getElementById('drawer-download-link');
+            if (data.has_file) {
+                dlLink.href = `/verify/document/${data.id}/download/`;
+                dlLink.classList.remove('hidden');
+            } else {
+                dlLink.classList.add('hidden');
+            }
+
+            backdrop.classList.remove('hidden');
+            drawer.classList.remove('translate-x-full');
+        }
+
+        function closeDocDrawer() {
+            document.getElementById('document-reader-drawer').classList.add('translate-x-full');
+            document.getElementById('drawer-backdrop').classList.add('hidden');
+        }
+    </script>
+
+</c-base>

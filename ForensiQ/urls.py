@@ -8,6 +8,7 @@ urlpatterns = [
     path("", include("core.urls")),
     path("demo/", include("demo.urls")),
     path("mail/", include("q_mail.urls")),
+    path("verify/", include("q_verify.urls")),
 ]
 
 if settings.DEBUG:
