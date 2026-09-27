@@ -6,9 +6,22 @@ Optimized, N+1 safe queries for dashboards, Tabulator data tables, and metrics a
 import uuid
 from typing import Any
 
+from django.core.paginator import Paginator
 from django.db.models import Count, Q, QuerySet
 
 from .models import FileEvidenceHit, ScannedDevice
+
+
+def format_file_size(size_bytes: int) -> str:
+    """
+    Formats raw byte count into human-readable representation.
+    """
+    size = float(size_bytes)
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size < 1024.0:
+            return f"{size:.2f} {unit}"
+        size /= 1024.0
+    return f"{size:.2f} PB"
 
 
 def get_all_scanned_devices() -> QuerySet[ScannedDevice]:
@@ -60,6 +73,110 @@ def get_evidence_hits_query(
         )
 
     return qs.order_by("-risk_score", "-created_at")
+
+
+def get_paginated_evidence_hits(
+    device_id: str | uuid.UUID | None = None,
+    *,
+    page: int = 1,
+    page_size: int = 25,
+    search: str = "",
+    keyword: str = "",
+    match_type: str = "",
+    risk_level: str = "",
+    sort_field: str = "risk_score",
+    sort_dir: str = "desc",
+) -> dict[str, Any]:
+    """
+    High-performance server-side paginated selector for Tabulator evidence grids.
+    Scales to millions of evidence records with indexed sorting, filtering, and 0 N+1 queries.
+    """
+    qs = FileEvidenceHit.objects.select_related("device").all()
+
+    if device_id:
+        qs = qs.filter(device_id=device_id)
+
+    if keyword:
+        qs = qs.filter(matched_keyword__iexact=keyword.strip())
+
+    if match_type:
+        qs = qs.filter(match_type=match_type.strip())
+
+    if risk_level:
+        risk_lower = risk_level.strip().lower()
+        if risk_lower == "high":
+            qs = qs.filter(risk_score__gte=70)
+        elif risk_lower == "medium":
+            qs = qs.filter(risk_score__gte=40, risk_score__lt=70)
+        elif risk_lower == "low":
+            qs = qs.filter(risk_score__lt=40)
+
+    if search:
+        q_str = search.strip()
+        qs = qs.filter(
+            Q(filename__icontains=q_str)
+            | Q(file_path__icontains=q_str)
+            | Q(matched_keyword__icontains=q_str)
+            | Q(snippet__icontains=q_str)
+            | Q(device__hostname__icontains=q_str)
+        )
+
+    allowed_sort_fields = {
+        "risk_score": "risk_score",
+        "hostname": "device__hostname",
+        "matched_keyword": "matched_keyword",
+        "match_type": "match_type",
+        "match_type_label": "match_type",
+        "filename": "filename",
+        "file_path": "file_path",
+        "file_size_bytes": "file_size_bytes",
+        "file_size_display": "file_size_bytes",
+        "file_modified_at": "file_modified_at",
+        "detection_timestamp": "detection_timestamp",
+        "created_at": "created_at",
+    }
+    db_sort_field = allowed_sort_fields.get(sort_field, "risk_score")
+    order_prefix = "-" if sort_dir.lower() == "desc" else ""
+    qs = qs.order_by(f"{order_prefix}{db_sort_field}", "-created_at")
+
+    paginator = Paginator(qs, max(1, min(page_size, 500)))
+    page_obj = paginator.get_page(page)
+
+    rows = []
+    for h in page_obj.object_list:
+        rows.append(
+            {
+                "id": str(h.id),
+                "hostname": h.device.hostname,
+                "file_path": h.file_path,
+                "filename": h.filename,
+                "extension": h.extension,
+                "file_size_bytes": h.file_size_bytes,
+                "file_size_display": format_file_size(h.file_size_bytes),
+                "matched_keyword": h.matched_keyword,
+                "match_type": h.match_type,
+                "match_type_label": h.get_match_type_display(),
+                "snippet": h.snippet or "-",
+                "risk_score": h.risk_score,
+                "file_modified_at": (
+                    h.file_modified_at.strftime("%Y-%m-%d %H:%M") if h.file_modified_at else "-"
+                ),
+                "detection_timestamp": (
+                    h.detection_timestamp.strftime("%Y-%m-%d %H:%M")
+                    if h.detection_timestamp
+                    else "-"
+                ),
+                "is_reviewed": h.is_reviewed,
+            }
+        )
+
+    return {
+        "data": rows,
+        "last_page": paginator.num_pages,
+        "last_row": paginator.count,
+        "total_count": paginator.count,
+        "current_page": page_obj.number,
+    }
 
 
 def get_scan_dashboard_metrics() -> dict[str, Any]:

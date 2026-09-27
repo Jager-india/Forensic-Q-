@@ -11,11 +11,12 @@ from django.conf import settings
 from django.contrib import messages
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from .selectors import (
     get_all_scanned_devices,
     get_evidence_hits_query,
+    get_paginated_evidence_hits,
     get_scan_dashboard_metrics,
     get_scanned_device_by_id,
 )
@@ -26,68 +27,64 @@ from .services import (
 )
 
 
+@require_GET
 def scan_dashboard_view(request: HttpRequest) -> HttpResponse:
     """
     Main Q-Scan forensic dashboard displaying audited endpoints, keyword metrics,
-    and interactive Tabulator evidence grid.
+    and high-performance remote-paginated evidence grid.
     """
-    selected_device_id = request.GET.get("device_id", "").strip()
-    selected_keyword = request.GET.get("keyword", "").strip()
-    selected_match_type = request.GET.get("match_type", "").strip()
-    search_query = request.GET.get("q", "").strip()
-
-    # Fetch metrics & devices
     metrics = get_scan_dashboard_metrics()
     devices = get_all_scanned_devices()
-
-    # Query hits
-    hits = get_evidence_hits_query(
-        device_id=selected_device_id or None,
-        keyword=selected_keyword or None,
-        match_type=selected_match_type or None,
-        search_query=search_query or None,
-    )
-
-    # Format table data for Tabulator
-    table_data = []
-    for h in hits[:1000]:  # Cap initial table payload at 1000 for instant UI rendering
-        table_data.append(
-            {
-                "id": str(h.id),
-                "hostname": h.device.hostname,
-                "file_path": h.file_path,
-                "filename": h.filename,
-                "extension": h.extension,
-                "file_size_bytes": h.file_size_bytes,
-                "file_size_display": _format_size(h.file_size_bytes),
-                "matched_keyword": h.matched_keyword,
-                "match_type": h.match_type,
-                "match_type_label": h.get_match_type_display(),
-                "snippet": h.snippet or "-",
-                "risk_score": h.risk_score,
-                "file_modified_at": (
-                    h.file_modified_at.strftime("%Y-%m-%d %H:%M") if h.file_modified_at else "-"
-                ),
-                "detection_timestamp": (
-                    h.detection_timestamp.strftime("%Y-%m-%d %H:%M")
-                    if h.detection_timestamp
-                    else "-"
-                ),
-                "is_reviewed": h.is_reviewed,
-            }
-        )
 
     context = {
         "metrics": metrics,
         "devices": devices,
-        "selected_device_id": selected_device_id,
-        "selected_keyword": selected_keyword,
-        "selected_match_type": selected_match_type,
-        "search_query": search_query,
-        "table_data_json": json.dumps(table_data),
-        "total_filtered_hits": hits.count(),
     }
     return render(request, "q_scan/dashboard.html", context)
+
+
+@require_GET
+def evidence_hits_api_view(request: HttpRequest) -> JsonResponse:
+    """
+    Server-side paginated AJAX endpoint for Tabulator evidence data grid.
+    Handles remote pagination, multi-field searching, column sorting, and risk filtering.
+    """
+    try:
+        page = int(request.GET.get("page", 1))
+    except (ValueError, TypeError):
+        page = 1
+
+    try:
+        page_size = int(request.GET.get("size", 25))
+    except (ValueError, TypeError):
+        page_size = 25
+
+    search = request.GET.get("search") or request.GET.get("q") or ""
+    keyword = request.GET.get("keyword", "").strip()
+    match_type = request.GET.get("match_type", "").strip()
+    risk_level = request.GET.get("risk_level", "").strip()
+    device_id = request.GET.get("device_id", "").strip() or None
+
+    sort_field = (
+        request.GET.get("sort[0][field]")
+        or request.GET.get("sort_by")
+        or request.GET.get("sort")
+        or "risk_score"
+    )
+    sort_dir = request.GET.get("sort[0][dir]") or request.GET.get("dir") or "desc"
+
+    result = get_paginated_evidence_hits(
+        device_id=device_id,
+        page=page,
+        page_size=page_size,
+        search=search,
+        keyword=keyword,
+        match_type=match_type,
+        risk_level=risk_level,
+        sort_field=sort_field,
+        sort_dir=sort_dir,
+    )
+    return JsonResponse(result)
 
 
 @require_POST
@@ -123,49 +120,24 @@ def upload_scan_csv_view(request: HttpRequest) -> HttpResponse:
     return redirect("q_scan:dashboard")
 
 
-@require_http_methods(["GET", "POST"])
+@require_GET
 def device_detail_view(request: HttpRequest, device_id: str) -> HttpResponse:
     """
     Displays deep-dive details and hits for a specific scanned device.
+    Uses remote server-side pagination for instant rendering of massive hit datasets.
     """
     device = get_scanned_device_by_id(device_id)
     if not device:
         raise Http404("Scanned device not found")
 
-    hits = get_evidence_hits_query(device_id=device.id)
-
-    table_data = [
-        {
-            "id": str(h.id),
-            "hostname": device.hostname,
-            "file_path": h.file_path,
-            "filename": h.filename,
-            "extension": h.extension,
-            "file_size_bytes": h.file_size_bytes,
-            "file_size_display": _format_size(h.file_size_bytes),
-            "matched_keyword": h.matched_keyword,
-            "match_type": h.match_type,
-            "match_type_label": h.get_match_type_display(),
-            "snippet": h.snippet or "-",
-            "risk_score": h.risk_score,
-            "file_modified_at": (
-                h.file_modified_at.strftime("%Y-%m-%d %H:%M") if h.file_modified_at else "-"
-            ),
-            "detection_timestamp": (
-                h.detection_timestamp.strftime("%Y-%m-%d %H:%M") if h.detection_timestamp else "-"
-            ),
-            "is_reviewed": h.is_reviewed,
-        }
-        for h in hits
-    ]
+    total_hits = device.hits.count()
 
     return render(
         request,
         "q_scan/device_detail.html",
         {
             "device": device,
-            "table_data_json": json.dumps(table_data),
-            "total_hits": hits.count(),
+            "total_hits": total_hits,
         },
     )
 

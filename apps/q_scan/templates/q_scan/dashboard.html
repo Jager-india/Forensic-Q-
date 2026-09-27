@@ -356,16 +356,41 @@
 
     <!-- Tabulator Initialization Script -->
     <script>
-        const tableData = {{ table_data_json|safe }};
+        let table = null;
+        let debounceTimer = null;
+
+        function applyFilters() {
+            if (table) table.setData();
+        }
+
+        function resetFilters() {
+            const searchInput = document.getElementById("grid-search");
+            const matchTypeSelect = document.getElementById("filter-match-type");
+            const riskSelect = document.getElementById("filter-risk");
+            if (searchInput) searchInput.value = "";
+            if (matchTypeSelect) matchTypeSelect.value = "";
+            if (riskSelect) riskSelect.value = "";
+            applyFilters();
+        }
 
         document.addEventListener('DOMContentLoaded', function () {
-            const table = new Tabulator("#evidence-table", {
-                data: tableData,
+            table = new Tabulator("#evidence-table", {
+                ajaxURL: "{% url 'q_scan:hits_api' %}",
+                ajaxConfig: "GET",
+                ajaxParams: function () {
+                    return {
+                        search: document.getElementById("grid-search")?.value || "",
+                        match_type: document.getElementById("filter-match-type")?.value || "",
+                        risk_level: document.getElementById("filter-risk")?.value || "",
+                    };
+                },
+                pagination: true,
+                paginationMode: "remote",
+                paginationSize: 25,
+                paginationSizeSelector: [25, 50, 100, 250],
+                sortMode: "remote",
                 layout: "fitColumns",
                 responsiveLayout: "collapse",
-                pagination: "local",
-                paginationSize: 20,
-                paginationSizeSelector: [10, 20, 50, 100],
                 placeholder: "No forensic evidence hits found matching current filters",
                 initialSort: [{ column: "risk_score", dir: "desc" }],
                 columns: [
@@ -373,19 +398,20 @@
                         title: "Risk",
                         field: "risk_score",
                         width: 90,
+                        headerSort: true,
                         formatter: function (cell) {
                             const val = cell.getValue();
                             let badgeClass = "bg-slate-500/10 text-slate-400 border-slate-500/20";
                             if (val >= 70) badgeClass = "bg-rose-500/10 text-rose-400 border-rose-500/30";
                             else if (val >= 40) badgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/30";
                             return `<span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${badgeClass}">${val}</span>`;
-                        },
-                        sorter: "number"
+                        }
                     },
                     {
                         title: "Host",
                         field: "hostname",
                         width: 140,
+                        headerSort: true,
                         formatter: function (cell) {
                             return `<span class="font-bold text-slate-800 dark:text-zinc-200">${cell.getValue()}</span>`;
                         }
@@ -394,6 +420,7 @@
                         title: "Keyword",
                         field: "matched_keyword",
                         width: 130,
+                        headerSort: true,
                         formatter: function (cell) {
                             return `<span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-teal-500/15 text-teal-400 border border-teal-500/30">${cell.getValue()}</span>`;
                         }
@@ -402,6 +429,7 @@
                         title: "Match Type",
                         field: "match_type_label",
                         width: 140,
+                        headerSort: false,
                         formatter: function (cell) {
                             return `<span class="text-[11px] font-mono text-slate-400">${cell.getValue()}</span>`;
                         }
@@ -410,6 +438,7 @@
                         title: "File Name",
                         field: "filename",
                         width: 180,
+                        headerSort: true,
                         formatter: function (cell) {
                             return `<span class="font-mono text-xs text-slate-700 dark:text-zinc-300 font-semibold" title="${cell.getRow().getData().file_path}">${cell.getValue()}</span>`;
                         }
@@ -418,13 +447,12 @@
                         title: "Size",
                         field: "file_size_display",
                         width: 100,
-                        sorter: function (a, b, aRow, bRow) {
-                            return aRow.getData().file_size_bytes - bRow.getData().file_size_bytes;
-                        }
+                        headerSort: true
                     },
                     {
                         title: "Context Snippet",
                         field: "snippet",
+                        headerSort: false,
                         formatter: function (cell) {
                             const snippet = cell.getValue();
                             if (!snippet || snippet === "-") return `<span class="text-slate-500 font-mono text-[11px]">-</span>`;
@@ -435,6 +463,7 @@
                         title: "Modified Date",
                         field: "file_modified_at",
                         width: 130,
+                        headerSort: true,
                         formatter: function (cell) {
                             return `<span class="text-[11px] font-mono text-slate-400">${cell.getValue()}</span>`;
                         }
@@ -443,57 +472,28 @@
             });
 
             // Global search filter
-            document.getElementById("grid-search").addEventListener("input", function (e) {
-                const term = e.target.value.toLowerCase();
-                table.setFilter(function (data) {
-                    if (!term) return true;
-                    return (
-                        (data.filename && data.filename.toLowerCase().includes(term)) ||
-                        (data.file_path && data.file_path.toLowerCase().includes(term)) ||
-                        (data.matched_keyword && data.matched_keyword.toLowerCase().includes(term)) ||
-                        (data.snippet && data.snippet.toLowerCase().includes(term)) ||
-                        (data.hostname && data.hostname.toLowerCase().includes(term))
-                    );
-                });
+            document.getElementById("grid-search")?.addEventListener("input", function () {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(applyFilters, 300);
             });
 
             // Match type filter
-            document.getElementById("filter-match-type").addEventListener("change", function (e) {
-                const val = e.target.value;
-                if (!val) {
-                    table.removeFilter("match_type", "=");
-                } else {
-                    table.setFilter("match_type", "=", val);
-                }
+            document.getElementById("filter-match-type")?.addEventListener("change", function () {
+                applyFilters();
             });
 
             // Risk level filter
-            document.getElementById("filter-risk").addEventListener("change", function (e) {
-                const val = e.target.value;
-                if (!val) {
-                    table.clearFilter(true);
-                } else if (val === "high") {
-                    table.setFilter("risk_score", ">=", 70);
-                } else if (val === "medium") {
-                    table.setFilter([
-                        { field: "risk_score", type: ">=", value: 40 },
-                        { field: "risk_score", type: "<", value: 70 }
-                    ]);
-                } else if (val === "low") {
-                    table.setFilter("risk_score", "<", 40);
-                }
+            document.getElementById("filter-risk")?.addEventListener("change", function () {
+                applyFilters();
             });
 
             // Reset filters
-            document.getElementById("clear-filters-btn").addEventListener("click", function () {
-                document.getElementById("grid-search").value = "";
-                document.getElementById("filter-match-type").value = "";
-                document.getElementById("filter-risk").value = "";
-                table.clearFilter();
+            document.getElementById("clear-filters-btn")?.addEventListener("click", function () {
+                resetFilters();
             });
 
             // JSON download
-            document.getElementById("tabulator-download-json").addEventListener("click", function () {
+            document.getElementById("tabulator-download-json")?.addEventListener("click", function () {
                 table.download("json", "forensiq_q_scan_evidence.json");
             });
         });

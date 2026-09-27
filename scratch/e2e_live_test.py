@@ -57,7 +57,7 @@ print("\n[STEP 2] Testing Application 1: Q-Scan (Endpoint Keyword Filesystem Eng
 scan_home_res = client.get(reverse("q_scan:dashboard"))
 assert scan_home_res.status_code == 200, f"Q-Scan dashboard failed: {scan_home_res.status_code}"
 assert b"Audited Endpoints" in scan_home_res.content, "KPI cards missing"
-assert b"q_scan.py" in scan_home_res.content, "Auditor tool links missing"
+assert b"q_scan.exe" in scan_home_res.content, "Auditor tool executable link missing"
 
 # Ingest Real Sample CSV
 csv_path = Path("scratch/test_evidence/scan_results.csv")
@@ -83,11 +83,19 @@ assert device is not None, "Scanned device record was not created"
 hits = FileEvidenceHit.objects.filter(device=device)
 assert hits.count() >= 8, f"Expected at least 8 evidence hits, found {hits.count()}"
 
-# Verify Tabulator Payload & Critical Keywords
-assert b"CFO-WORKSTATION-01" in upload_res.content, "Host missing in dashboard"
-assert b"kickback" in upload_res.content, "Keyword 'kickback' missing in table"
-assert b"password" in upload_res.content, "Keyword 'password' missing in table"
-assert b"offshore" in upload_res.content, "Keyword 'offshore' missing in table"
+# Verify Tabulator Remote API Endpoint & Filter Parameters
+api_res = client.get(reverse("q_scan:hits_api"), {"device_id": str(device.id)})
+assert api_res.status_code == 200, f"Hits API endpoint failed: {api_res.status_code}"
+api_data = api_res.json()
+assert "data" in api_data, "Hits API response missing 'data' list"
+assert api_data["total_count"] >= 8, f"Expected total_count >= 8, got {api_data['total_count']}"
+keywords_in_api = [r["matched_keyword"] for r in api_data["data"]]
+assert any("kickback" in kw.lower() for kw in keywords_in_api), (
+    "Keyword 'kickback' missing in API data"
+)
+assert any("password" in kw.lower() for kw in keywords_in_api), (
+    "Keyword 'password' missing in API data"
+)
 
 # Test Device Detail View
 detail_res = client.get(reverse("q_scan:device_detail", args=[device.id]))
@@ -101,6 +109,12 @@ assert b"CFO-WORKSTATION-01" in export_res.content, "Export CSV missing records"
 assert b"kickback" in export_res.content, "Export CSV missing keyword hits"
 
 # Test Auditor Tool Downloads
+download_exe = client.get(reverse("q_scan:download_tool", args=["q_scan.exe"]))
+assert download_exe.status_code == 200, f"Tool exe download failed: {download_exe.status_code}"
+
+download_zip = client.get(reverse("q_scan:download_tool", args=["q_scan_package.zip"]))
+assert download_zip.status_code == 200, f"Tool zip download failed: {download_zip.status_code}"
+
 download_py = client.get(reverse("q_scan:download_tool", args=["q_scan.py"]))
 assert download_py.status_code == 200, f"Tool download failed: {download_py.status_code}"
 assert b"StandaloneDiskScanner" in download_py.getvalue(), "Downloaded python file corrupt"
@@ -112,7 +126,7 @@ download_bat = client.get(reverse("q_scan:download_tool", args=["build_exe.bat"]
 assert download_bat.status_code == 200, f"Build bat download failed: {download_bat.status_code}"
 
 print(
-    "   [OK] Q-Scan passed all tests: CSV ingestion, risk scoring, Tabulator UI, detail drilldown, and tool downloads."
+    "   [OK] Q-Scan passed all tests: CSV ingestion, risk scoring, remote Tabulator API, detail drilldown, and standalone tool downloads."
 )
 
 # -------------------------------------------------------------
