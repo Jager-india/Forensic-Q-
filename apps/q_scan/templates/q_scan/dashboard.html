@@ -373,6 +373,75 @@
             applyFilters();
         }
 
+        function copyPath(event, text, label) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            if (!text) return;
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast(`Copied ${label}: ${text}`);
+                }).catch(() => {
+                    fallbackCopy(text, label);
+                });
+            } else {
+                fallbackCopy(text, label);
+            }
+        }
+
+        function fallbackCopy(text, label) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast(`Copied ${label}: ${text}`);
+            } catch (err) {
+                console.error('Fallback copy failed', err);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function showToast(message) {
+            let container = document.getElementById("toast-container");
+            if (!container) {
+                container = document.createElement("div");
+                container.id = "toast-container";
+                container.className = "fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-lg pointer-events-none";
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement("div");
+            toast.className = "flex items-center gap-2.5 px-4 py-3 rounded-xl bg-zinc-900/95 border border-teal-500/40 text-white shadow-2xl shadow-teal-500/10 text-xs font-mono transform translate-y-2 opacity-0 transition-all duration-300 pointer-events-auto backdrop-blur-md";
+            
+            const icon = document.createElement("i");
+            icon.className = "fa-solid fa-circle-check text-emerald-400 text-sm shrink-0";
+            
+            const textEl = document.createElement("div");
+            textEl.className = "truncate flex-1 font-sans text-xs text-zinc-200";
+            textEl.textContent = message;
+
+            toast.appendChild(icon);
+            toast.appendChild(textEl);
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove("translate-y-2", "opacity-0");
+            });
+
+            setTimeout(() => {
+                toast.classList.add("opacity-0", "translate-y-2");
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             table = new Tabulator("#evidence-table", {
                 ajaxURL: "{% url 'q_scan:hits_api' %}",
@@ -397,7 +466,7 @@
                     {
                         title: "Risk",
                         field: "risk_score",
-                        width: 90,
+                        width: 80,
                         headerSort: true,
                         formatter: function (cell) {
                             const val = cell.getValue();
@@ -410,7 +479,7 @@
                     {
                         title: "Host",
                         field: "hostname",
-                        width: 140,
+                        width: 130,
                         headerSort: true,
                         formatter: function (cell) {
                             return `<span class="font-bold text-slate-800 dark:text-zinc-200">${cell.getValue()}</span>`;
@@ -428,25 +497,66 @@
                     {
                         title: "Match Type",
                         field: "match_type_label",
-                        width: 140,
+                        width: 135,
                         headerSort: false,
                         formatter: function (cell) {
                             return `<span class="text-[11px] font-mono text-slate-400">${cell.getValue()}</span>`;
                         }
                     },
                     {
-                        title: "File Name",
+                        title: "Filename & Location",
                         field: "filename",
-                        width: 180,
+                        minWidth: 230,
                         headerSort: true,
                         formatter: function (cell) {
-                            return `<span class="font-mono text-xs text-slate-700 dark:text-zinc-300 font-semibold" title="${cell.getRow().getData().file_path}">${cell.getValue()}</span>`;
+                            const data = cell.getRow().getData();
+                            const folder = data.folder_path || "";
+                            const fullPath = data.file_path || "";
+                            return `
+                                <div class="py-0.5">
+                                    <div class="font-mono text-xs text-slate-800 dark:text-zinc-200 font-semibold truncate" title="${fullPath.replace(/"/g, '&quot;')}">
+                                        ${cell.getValue()}
+                                    </div>
+                                    <div class="font-mono text-[10px] text-slate-400 dark:text-zinc-500 truncate flex items-center gap-1 mt-0.5" title="${folder.replace(/"/g, '&quot;')}">
+                                        <i class="fa-solid fa-folder text-amber-400/80 text-[9px] shrink-0"></i>
+                                        <span class="truncate">${folder || '-'}</span>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    },
+                    {
+                        title: "Copy Path",
+                        field: "folder_path",
+                        width: 140,
+                        hozAlign: "center",
+                        headerSort: false,
+                        formatter: function (cell) {
+                            const data = cell.getRow().getData();
+                            const safeFolder = encodeURIComponent(data.folder_path || "");
+                            const safeFile = encodeURIComponent(data.file_path || "");
+                            return `
+                                <div class="flex items-center justify-center gap-1.5">
+                                    <button onclick="copyPath(event, decodeURIComponent('${safeFolder}'), 'Folder Path')" 
+                                            class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 hover:text-teal-300 text-[10px] font-semibold border border-teal-500/25 transition-all cursor-pointer shadow-sm" 
+                                            title="Copy Folder Path: ${data.folder_path?.replace(/"/g, '&quot;')}">
+                                        <i class="fa-solid fa-folder text-[10px] text-amber-400"></i>
+                                        <span>Folder</span>
+                                    </button>
+                                    <button onclick="copyPath(event, decodeURIComponent('${safeFile}'), 'File Path')" 
+                                            class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-semibold border border-zinc-700 transition-all cursor-pointer" 
+                                            title="Copy Full File Path: ${data.file_path?.replace(/"/g, '&quot;')}">
+                                        <i class="fa-regular fa-copy text-[10px]"></i>
+                                        <span>File</span>
+                                    </button>
+                                </div>
+                            `;
                         }
                     },
                     {
                         title: "Size",
                         field: "file_size_display",
-                        width: 100,
+                        width: 90,
                         headerSort: true
                     },
                     {

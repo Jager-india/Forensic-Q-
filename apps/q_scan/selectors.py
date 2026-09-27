@@ -144,11 +144,16 @@ def get_paginated_evidence_hits(
 
     rows = []
     for h in page_obj.object_list:
+        file_p = h.file_path or ""
+        last_slash = max(file_p.rfind("\\"), file_p.rfind("/"))
+        folder_p = file_p[:last_slash] if last_slash != -1 else file_p
+
         rows.append(
             {
                 "id": str(h.id),
                 "hostname": h.device.hostname,
-                "file_path": h.file_path,
+                "file_path": file_p,
+                "folder_path": folder_p,
                 "filename": h.filename,
                 "extension": h.extension,
                 "file_size_bytes": h.file_size_bytes,
