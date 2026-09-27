@@ -1,6 +1,6 @@
 <c-base title="Q-Scan | Endpoint Filesystem & Keyword Forensic Scanner">
 
-    <!-- Page Header with Action Buttons -->
+    <!-- Page Header with Direct Download & Action Buttons -->
     <c-page_header 
         title="Q-Scan &bull; Endpoint Keyword Forensic Scanner" 
         subtitle="High-performance drive traversal, deep Office & archive inspection, zero-buffer streaming evidence triage." 
@@ -10,11 +10,17 @@
         section="Filesystem Forensics">
         
         <div class="flex items-center gap-2">
-            <button onclick="openToolModal()" 
-                    class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer">
+            <a href="{% url 'q_scan:download_tool' 'q_scan.exe' %}" 
+               class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 text-xs font-bold border border-teal-500/40 shadow-sm transition-all transform hover:-translate-y-0.5 cursor-pointer">
                 <i class="fa-solid fa-download text-teal-400"></i>
-                <span>Auditor Tools & .EXE</span>
-            </button>
+                <span>Download q_scan.exe</span>
+            </a>
+
+            <a href="{% url 'q_scan:download_tool' 'q_scan_package.zip' %}" 
+               class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer">
+                <i class="fa-solid fa-file-zipper text-amber-400"></i>
+                <span>Download Bundle (ZIP)</span>
+            </a>
 
             <button onclick="openUploadModal()" 
                     class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-lg shadow-teal-600/20 transition-all transform hover:-translate-y-0.5 cursor-pointer">
@@ -55,40 +61,40 @@
             variant="emerald" />
     </div>
 
-    <!-- Standalone Auditor Binary Quick Launch Banner -->
-    <div class="mb-8 p-5 rounded-2xl bg-gradient-to-r from-teal-950/40 via-slate-900/60 to-zinc-900/80 border border-teal-800/40 shadow-sm backdrop-blur-md">
-        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0">
-                    <i class="fa-solid fa-terminal text-lg"></i>
+    <!-- Pre-Compiled Standalone Auditor Binary Direct Download Banner -->
+    <div class="mb-8 p-5 rounded-2xl bg-gradient-to-r from-teal-950/50 via-slate-900/70 to-zinc-900/90 border border-teal-700/50 shadow-lg backdrop-blur-md">
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
+            <div class="flex items-center gap-3.5">
+                <div class="w-12 h-12 rounded-xl bg-teal-500/15 border border-teal-500/40 flex items-center justify-center text-teal-400 shrink-0 shadow-inner">
+                    <i class="fa-solid fa-download text-xl"></i>
                 </div>
                 <div>
                     <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                        <span>Offline Endpoint Scanner Tool (Q-Scan Portable)</span>
-                        <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 font-semibold">Nuitka Standalone</span>
+                        <span>Pre-Compiled Endpoint Scanner (Ready to Run)</span>
+                        <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Standalone .EXE Ready</span>
                     </h3>
-                    <p class="text-xs text-slate-400 mt-0.5">
-                        Deploy <code class="text-teal-300 font-mono text-[11px]">q_scan.exe</code> directly to audited laptops or servers to stream matches directly into <code class="text-teal-300 font-mono text-[11px]">scan_results.csv</code> with zero data loss.
+                    <p class="text-xs text-slate-300 mt-0.5">
+                        Download <code class="text-teal-300 font-mono text-[11px] font-bold">q_scan.exe</code> directly onto the auditee's PC or a USB drive. Double-click to run — zero installation, zero Python dependencies.
                     </p>
                 </div>
             </div>
 
-            <div class="flex items-center gap-2 shrink-0">
-                <a href="{% url 'q_scan:download_tool' 'q_scan.py' %}" 
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono font-medium border border-zinc-700 transition-colors">
-                    <i class="fa-brands fa-python text-teal-400"></i>
-                    <span>q_scan.py</span>
+            <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                <a href="{% url 'q_scan:download_tool' 'q_scan.exe' %}" 
+                   class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 text-xs font-bold shadow-md shadow-teal-500/20 transition-all transform hover:-translate-y-0.5">
+                    <i class="fa-solid fa-download text-sm"></i>
+                    <span>Download q_scan.exe (7.4 MB)</span>
                 </a>
-                <a href="{% url 'q_scan:download_tool' 'config.json' %}" 
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono font-medium border border-zinc-700 transition-colors">
-                    <i class="fa-solid fa-gear text-amber-400"></i>
-                    <span>config.json</span>
+                <a href="{% url 'q_scan:download_tool' 'q_scan_package.zip' %}" 
+                   class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-colors">
+                    <i class="fa-solid fa-file-zipper text-amber-400"></i>
+                    <span>ZIP Package (.exe + config)</span>
                 </a>
-                <a href="{% url 'q_scan:download_tool' 'build_exe.bat' %}" 
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 text-white text-xs font-mono font-medium shadow-sm transition-colors">
-                    <i class="fa-solid fa-box-archive"></i>
-                    <span>build_exe.bat</span>
-                </a>
+                <button onclick="openToolModal()" 
+                        class="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 text-xs border border-zinc-700 transition-colors cursor-pointer">
+                    <i class="fa-solid fa-circle-question text-teal-400"></i>
+                    <span>How it works</span>
+                </button>
             </div>
         </div>
     </div>
@@ -165,9 +171,14 @@
                     <i class="fa-solid fa-hard-drive text-4xl text-slate-600 dark:text-zinc-600 mb-3 block"></i>
                     <p class="text-sm font-semibold text-slate-300">No Audited Endpoints Found</p>
                     <p class="text-xs text-slate-500 mt-1">Run <code class="text-teal-400 font-mono">q_scan.exe</code> on a workstation and upload the generated <code class="text-teal-400 font-mono">scan_results.csv</code>.</p>
-                    <button onclick="openUploadModal()" class="mt-4 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-md cursor-pointer">
-                        <i class="fa-solid fa-file-arrow-up mr-1.5"></i> Upload CSV Report
-                    </button>
+                    <div class="mt-4 flex items-center justify-center gap-3">
+                        <a href="{% url 'q_scan:download_tool' 'q_scan.exe' %}" class="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-md">
+                            <i class="fa-solid fa-download mr-1.5"></i> Download q_scan.exe
+                        </a>
+                        <button onclick="openUploadModal()" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 cursor-pointer">
+                            <i class="fa-solid fa-file-arrow-up mr-1.5"></i> Upload CSV Report
+                        </button>
+                    </div>
                 </div>
             {% endif %}
         </c-card>
@@ -287,55 +298,56 @@
         </div>
     </div>
 
-    <!-- Auditor Tools & Compilation Guide Modal -->
+    <!-- Auditor Tools & Instructions Modal -->
     <div id="tool-modal" class="fixed inset-0 z-50 hidden bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button onclick="closeToolModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white text-lg">
                 <i class="fa-solid fa-xmark"></i>
             </button>
 
             <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
-                    <i class="fa-solid fa-cube text-lg"></i>
+                    <i class="fa-solid fa-circle-check text-lg"></i>
                 </div>
                 <div>
-                    <h3 class="text-base font-bold text-white">Standalone Auditor Binary Packaging (Nuitka)</h3>
-                    <p class="text-xs text-zinc-400">Create a compact, zero-dependency Windows <code class="text-teal-300 font-mono text-[11px]">.exe</code> for rapid endpoint deployment.</p>
+                    <h3 class="text-base font-bold text-white">How to Run Q-Scan on Target Machine</h3>
+                    <p class="text-xs text-zinc-400">Pre-compiled Windows executable — no setup or installation required.</p>
                 </div>
             </div>
 
-            <div class="space-y-4 text-xs text-zinc-300">
-                <div class="p-4 rounded-xl bg-zinc-800/60 border border-zinc-700/60">
-                    <h4 class="font-bold text-teal-400 mb-1 flex items-center gap-2">
-                        <i class="fa-solid fa-terminal"></i> 1-Click Compilation Command
-                    </h4>
-                    <p class="text-zinc-400 mb-2">Run from the repository root to compile a standalone executable:</p>
-                    <pre class="p-3 rounded-lg bg-zinc-950 font-mono text-[11px] text-teal-300 overflow-x-auto border border-zinc-800">uv run nuitka --standalone --onefile --assume-yes-for-downloads --output-filename=q_scan.exe tools/q_scan/q_scan.py</pre>
+            <div class="space-y-3 text-xs text-zinc-300">
+                <div class="p-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/60 flex items-start gap-3">
+                    <span class="w-6 h-6 rounded-full bg-teal-500/20 text-teal-300 font-mono font-bold flex items-center justify-center shrink-0">1</span>
+                    <div>
+                        <h4 class="font-bold text-white mb-0.5">Download Executable onto Auditee PC</h4>
+                        <p class="text-zinc-400">Download <code class="text-teal-300 font-mono">q_scan.exe</code> directly onto the auditee's workstation or onto a USB drive.</p>
+                    </div>
                 </div>
 
-                <div class="p-4 rounded-xl bg-zinc-800/60 border border-zinc-700/60">
-                    <h4 class="font-bold text-amber-400 mb-1 flex items-center gap-2">
-                        <i class="fa-solid fa-folder-tree"></i> Endpoint Auditor Package Layout
-                    </h4>
-                    <p class="text-zinc-400 mb-2">Copy these 2 files onto a USB drive or target endpoint:</p>
-                    <ul class="list-disc pl-5 space-y-1 font-mono text-[11px] text-zinc-300">
-                        <li><code>q_scan.exe</code> (Compiled standalone scanner executable)</li>
-                        <li><code>config.json</code> (Target roots, keywords, extensions, exclusions)</li>
-                    </ul>
+                <div class="p-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/60 flex items-start gap-3">
+                    <span class="w-6 h-6 rounded-full bg-teal-500/20 text-teal-300 font-mono font-bold flex items-center justify-center shrink-0">2</span>
+                    <div>
+                        <h4 class="font-bold text-white mb-0.5">Double-Click to Start Scanning</h4>
+                        <p class="text-zinc-400">Double-click <code class="text-teal-300 font-mono">q_scan.exe</code>. It scans <code class="text-teal-300 font-mono">C:\</code> (or paths configured in <code class="text-teal-300 font-mono">config.json</code>) and streams matches live into <code class="text-teal-300 font-mono">scan_results.csv</code>.</p>
+                    </div>
                 </div>
 
-                <div class="p-4 rounded-xl bg-zinc-800/60 border border-zinc-700/60">
-                    <h4 class="font-bold text-teal-400 mb-1 flex items-center gap-2">
-                        <i class="fa-solid fa-play"></i> Execution & Output
-                    </h4>
-                    <p class="text-zinc-400">
-                        Double-click <code class="text-teal-300 font-mono">q_scan.exe</code> or run via PowerShell. It will stream matches live to <code class="text-teal-300 font-mono">scan_results.csv</code> with zero buffering. Once done, upload the CSV above!
-                    </p>
+                <div class="p-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/60 flex items-start gap-3">
+                    <span class="w-6 h-6 rounded-full bg-teal-500/20 text-teal-300 font-mono font-bold flex items-center justify-center shrink-0">3</span>
+                    <div>
+                        <h4 class="font-bold text-white mb-0.5">Upload Evidence CSV to ForensiQ</h4>
+                        <p class="text-zinc-400">Click <strong>Import Scan Results CSV</strong> on this page and upload the resulting <code class="text-teal-300 font-mono">scan_results.csv</code> file to view the full investigation dashboard.</p>
+                    </div>
                 </div>
             </div>
 
-            <div class="mt-6 flex justify-end">
-                <button type="button" onclick="closeToolModal()" class="px-4 py-2 text-xs rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold cursor-pointer">
+            <div class="mt-5 pt-3 border-t border-zinc-800 flex items-center justify-between">
+                <a href="{% url 'q_scan:download_tool' 'q_scan.exe' %}" 
+                   class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-md">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Download q_scan.exe (7.4 MB)</span>
+                </a>
+                <button type="button" onclick="closeToolModal()" class="px-4 py-2 text-xs rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold cursor-pointer">
                     Close
                 </button>
             </div>

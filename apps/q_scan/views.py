@@ -261,6 +261,8 @@ def download_tool_file_view(request: HttpRequest, filename: str) -> HttpResponse
     Serves portable scanner scripts (q_scan.py, config.json, build_exe.bat) to field auditors.
     """
     allowed_files = {
+        "q_scan.exe": settings.BASE_DIR / "tools" / "q_scan" / "q_scan.exe",
+        "q_scan_package.zip": settings.BASE_DIR / "tools" / "q_scan" / "q_scan_package.zip",
         "q_scan.py": settings.BASE_DIR / "tools" / "q_scan" / "q_scan.py",
         "config.json": settings.BASE_DIR / "tools" / "q_scan" / "config.json",
         "build_exe.bat": settings.BASE_DIR / "tools" / "q_scan" / "build_exe.bat",
