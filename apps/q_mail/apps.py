@@ -12,10 +12,6 @@ class QMailConfig(AppConfig):
     module_name = "Mail"
     module_tag = "LIVE"
     module_accent = "purple"
-    module_tagline = "PST at the speed of audit."
-    module_features = [
-        "Emails, attachments, communication links",
-        "Keyword hits across threads",
-    ]
+    module_tagline = "Email Forensic Intelligence Analyzer"
     module_url = "/mail/"
     module_order = 3

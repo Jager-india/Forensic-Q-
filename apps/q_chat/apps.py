@@ -12,10 +12,6 @@ class QChatConfig(AppConfig):
     module_name = "Chat"
     module_tag = "LIVE"
     module_accent = "steel"
-    module_tagline = "Reconstructs team chat threads."
-    module_features = [
-        "Teams, Slack & WhatsApp thread correlation",
-        "Off-the-record chat keyword alerts",
-    ]
+    module_tagline = "Corporate Chat Forensic Analyzer"
     module_url = "/chat/"
     module_order = 9

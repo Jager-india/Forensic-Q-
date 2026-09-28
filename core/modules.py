@@ -12,11 +12,7 @@ DEFAULT_MODULE_SPECS = {
         "name": "Bank",
         "tag": "LIVE",
         "accent": "orange",
-        "tagline": "Reads statements. Flags keywords.",
-        "features": [
-            "Flagged transactions, vendor & party summary",
-            "Tuneable watchlist per investigation",
-        ],
+        "tagline": "Multi-Bank Forensic Analyzer",
         "href": "/bank/",
         "order": 1,
     },
@@ -26,11 +22,7 @@ DEFAULT_MODULE_SPECS = {
         "name": "Trail",
         "tag": "BUILDING",
         "accent": "gold",
-        "tagline": "Stitches flows. Sees the loop.",
-        "features": [
-            "Money trail map, multi-bank fund flow",
-            "Pass-through patterns across accounts",
-        ],
+        "tagline": "End-to-End Money Trail Mapper",
         "href": "/demo/sandbox/",
         "order": 2,
     },
@@ -40,11 +32,7 @@ DEFAULT_MODULE_SPECS = {
         "name": "Mail",
         "tag": "LIVE",
         "accent": "purple",
-        "tagline": "PST at the speed of audit.",
-        "features": [
-            "Emails, attachments, communication links",
-            "Keyword hits across threads",
-        ],
+        "tagline": "Email Forensic Intelligence Analyzer",
         "href": "/mail/",
         "order": 3,
     },
@@ -54,11 +42,7 @@ DEFAULT_MODULE_SPECS = {
         "name": "Scan",
         "tag": "LIVE",
         "accent": "teal",
-        "tagline": "Walks drives. Highlights hits.",
-        "features": [
-            "Relevant files, keyword hits",
-            "Evidence locations across the workstation",
-        ],
+        "tagline": "Computer Evidence Discovery Tool",
         "href": "/scan/",
         "order": 4,
     },
@@ -66,14 +50,10 @@ DEFAULT_MODULE_SPECS = {
         "num": "05",
         "category": "DOCUMENT",
         "name": "Verify",
-        "tag": "BUILDING",
+        "tag": "LIVE",
         "accent": "rose",
-        "tagline": "Catches the quiet edit.",
-        "features": [
-            "Metadata report, suspicious/edited files",
-            "Authenticity indicators across formats",
-        ],
-        "href": "/demo/sandbox/",
+        "tagline": "Document Metadata Forensic Analyzer",
+        "href": "/verify/",
         "order": 5,
     },
     "q_link": {
@@ -82,11 +62,7 @@ DEFAULT_MODULE_SPECS = {
         "name": "Link",
         "tag": "BUILDING",
         "accent": "amber",
-        "tagline": "Joins the dots across modules.",
-        "features": [
-            "Integrated evidence map",
-            "The bigger investigation picture",
-        ],
+        "tagline": "Cross-Source Evidence Correlation Engine",
         "href": "/demo/tabulator/",
         "order": 6,
     },
@@ -94,14 +70,10 @@ DEFAULT_MODULE_SPECS = {
         "num": "07",
         "category": "VOICE",
         "name": "Voice",
-        "tag": "LIVE",
+        "tag": "BUILDING",
         "accent": "steel",
-        "tagline": "Transcribes speech. Flags intent.",
-        "features": [
-            "Call transcripts, entity & speaker matrix",
-            "Concealment and intent detection",
-        ],
-        "href": "/voice/",
+        "tagline": "Voice Transcript Intelligence Analyzer",
+        "href": "/demo/sandbox/",
         "order": 7,
     },
     "q_ledger": {
@@ -110,11 +82,7 @@ DEFAULT_MODULE_SPECS = {
         "name": "Ledger",
         "tag": "BUILDING",
         "accent": "copper",
-        "tagline": "Reconciles PO, GRN and invoices.",
-        "features": [
-            "SAP / ERP variance analysis",
-            "Phantom vendor & duplicate invoice alerts",
-        ],
+        "tagline": "ERP Transaction Forensic Analyzer",
         "href": "/demo/tabulator/",
         "order": 8,
     },
@@ -124,11 +92,7 @@ DEFAULT_MODULE_SPECS = {
         "name": "Chat",
         "tag": "LIVE",
         "accent": "steel",
-        "tagline": "Reconstructs team chat threads.",
-        "features": [
-            "Teams, Slack & WhatsApp thread correlation",
-            "Off-the-record chat keyword alerts",
-        ],
+        "tagline": "Corporate Chat Forensic Analyzer",
         "href": "/chat/",
         "order": 9,
     },
@@ -213,10 +177,7 @@ def get_discovered_modules():
         elif "features" in default_spec:
             features = default_spec["features"]
         else:
-            features = [
-                f"Automated ingestion & triage for {clean_name}",
-                "Cross-correlation with case dossier",
-            ]
+            features = []
 
         href = getattr(config, "module_url", None) or default_spec.get("href") or "/demo/tabulator/"
         order = getattr(config, "module_order", None) or default_spec.get("order") or idx + 1

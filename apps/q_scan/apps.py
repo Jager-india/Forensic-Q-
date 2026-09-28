@@ -12,10 +12,6 @@ class QScanConfig(AppConfig):
     module_name = "Scan"
     module_tag = "LIVE"
     module_accent = "teal"
-    module_tagline = "Walks drives. Highlights hits."
-    module_features = [
-        "Relevant files, keyword hits",
-        "Evidence locations across the workstation",
-    ]
+    module_tagline = "Computer Evidence Discovery Tool"
     module_url = "/scan/"
     module_order = 4

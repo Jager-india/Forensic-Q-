@@ -27,22 +27,7 @@
                 :tag="module.tag" 
                 :accent="module.accent" 
                 :href="module.href" 
-                :tagline="module.tagline">
-                {% for feature in module.features %}
-                <p>
-                    <span class="font-bold
-                        {% if module.accent == 'orange' %} text-[#e87a4d] dark:text-[#f08a5d]
-                        {% elif module.accent == 'gold' %} text-[#b8a462] dark:text-[#d6c487]
-                        {% elif module.accent == 'purple' %} text-[#8e75b7] dark:text-[#bca7e0]
-                        {% elif module.accent == 'teal' %} text-[#4a9d90] dark:text-[#7ec7bb]
-                        {% elif module.accent == 'rose' %} text-[#b85761] dark:text-[#df7e88]
-                        {% elif module.accent == 'amber' %} text-[#c99238] dark:text-[#e8b765]
-                        {% elif module.accent == 'steel' or module.accent == 'blue' %} text-[#5a92b8] dark:text-[#7eaecf]
-                        {% elif module.accent == 'copper' or module.accent == 'terracotta' %} text-[#b85a38] dark:text-[#d67b59]
-                        {% else %} text-amber-500 {% endif %}">→</span> {{ feature }}
-                </p>
-                {% endfor %}
-            </c-module_card>
+                :tagline="module.tagline" />
         </div>
         {% empty %}
         <div class="w-full p-12 text-center text-slate-500 dark:text-zinc-500 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800">

@@ -12,10 +12,6 @@ class QVoiceConfig(AppConfig):
     module_name = "Voice"
     module_tag = "BUILDING"
     module_accent = "steel"
-    module_tagline = "Transcribes speech. Flags intent."
-    module_features = [
-        "Call transcripts, entity & speaker matrix",
-        "Concealment and intent detection",
-    ]
+    module_tagline = "Voice Transcript Intelligence Analyzer"
     module_url = "/demo/sandbox/"
     module_order = 7

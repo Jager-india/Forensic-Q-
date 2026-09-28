@@ -12,10 +12,6 @@ class QVerifyConfig(AppConfig):
     module_name = "Verify"
     module_tag = "LIVE"
     module_accent = "rose"
-    module_tagline = "Catches the quiet edit."
-    module_features = [
-        "Metadata report, suspicious/edited files",
-        "Authenticity indicators across formats",
-    ]
+    module_tagline = "Document Metadata Forensic Analyzer"
     module_url = "/verify/"
     module_order = 5

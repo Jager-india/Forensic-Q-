@@ -12,10 +12,6 @@ class QLinkConfig(AppConfig):
     module_name = "Link"
     module_tag = "BUILDING"
     module_accent = "amber"
-    module_tagline = "Joins the dots across modules."
-    module_features = [
-        "Integrated evidence map",
-        "The bigger investigation picture",
-    ]
+    module_tagline = "Cross-Source Evidence Correlation Engine"
     module_url = "/demo/tabulator/"
     module_order = 6

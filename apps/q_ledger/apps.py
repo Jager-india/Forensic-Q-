@@ -12,10 +12,6 @@ class QLedgerConfig(AppConfig):
     module_name = "Ledger"
     module_tag = "BUILDING"
     module_accent = "copper"
-    module_tagline = "Reconciles PO, GRN and invoices."
-    module_features = [
-        "SAP / ERP variance analysis",
-        "Phantom vendor & duplicate invoice alerts",
-    ]
+    module_tagline = "ERP Transaction Forensic Analyzer"
     module_url = "/demo/tabulator/"
     module_order = 8

@@ -12,10 +12,6 @@ class QBankConfig(AppConfig):
     module_name = "Bank"
     module_tag = "LIVE"
     module_accent = "orange"
-    module_tagline = "Reads statements. Flags keywords."
-    module_features = [
-        "Flagged transactions, vendor & party summary",
-        "Tuneable watchlist per investigation",
-    ]
+    module_tagline = "Multi-Bank Forensic Analyzer"
     module_url = "/bank/"
     module_order = 1
