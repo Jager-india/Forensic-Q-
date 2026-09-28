@@ -8,7 +8,7 @@ from django.conf import settings
 DEFAULT_MODULE_SPECS = {
     "q_bank": {
         "num": "01",
-        "category": "MONEY",
+        "category": "TRANSACTION",
         "name": "Bank",
         "tag": "LIVE",
         "accent": "orange",
@@ -22,7 +22,7 @@ DEFAULT_MODULE_SPECS = {
     },
     "q_trail": {
         "num": "02",
-        "category": "MONEY",
+        "category": "TRANSACTION",
         "name": "Trail",
         "tag": "BUILDING",
         "accent": "gold",

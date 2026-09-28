@@ -167,7 +167,7 @@ Used on landing pages and workstation engine selectors:
 ```html
 <c-module_card 
     num="01" 
-    category="MONEY" 
+    category="TRANSACTION" 
     name="Bank" 
     tag="LIVE" 
     accent="orange" 

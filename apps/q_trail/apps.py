@@ -8,7 +8,7 @@ class QTrailConfig(AppConfig):
 
     # Forensic Module Metadata
     module_num = "02"
-    module_category = "MONEY"
+    module_category = "TRANSACTION"
     module_name = "Trail"
     module_tag = "BUILDING"
     module_accent = "gold"

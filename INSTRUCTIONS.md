@@ -146,7 +146,7 @@ class QBankConfig(AppConfig):
 
     # Forensic Landing Page Card Metadata
     module_num = "01"
-    module_category = "MONEY"
+    module_category = "TRANSACTION"
     module_name = "Bank"
     module_tag = "LIVE"
     module_accent = "orange"  # orange, gold, purple, teal, rose, amber
