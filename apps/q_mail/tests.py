@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -18,7 +19,8 @@ class QMailUploadAndIngestionTests(TestCase):
         session["portal_authenticated"] = True
         session.save()
 
-    def test_initiate_upload_and_chunked_streaming(self):
+    @patch("q_mail.views.start_mailbox_processing")
+    def test_initiate_upload_and_chunked_streaming(self, mock_start_processing):
         # 1. Test initiating upload
         init_url = reverse("q_mail:upload_initiate")
         payload = {

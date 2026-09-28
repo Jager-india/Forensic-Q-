@@ -10,6 +10,7 @@ urlpatterns = [
     path("mail/", include("q_mail.urls")),
     path("verify/", include("q_verify.urls")),
     path("scan/", include("q_scan.urls")),
+    path("bank/", include("q_bank.urls")),
 ]
 
 if settings.DEBUG:

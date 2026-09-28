@@ -10,14 +10,14 @@ DEFAULT_MODULE_SPECS = {
         "num": "01",
         "category": "MONEY",
         "name": "Bank",
-        "tag": "BUILDING",
+        "tag": "LIVE",
         "accent": "orange",
         "tagline": "Reads statements. Flags keywords.",
         "features": [
             "Flagged transactions, vendor & party summary",
             "Tuneable watchlist per investigation",
         ],
-        "href": "/demo/tabulator/",
+        "href": "/bank/",
         "order": 1,
     },
     "q_trail": {

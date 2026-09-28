@@ -10,12 +10,12 @@ class QBankConfig(AppConfig):
     module_num = "01"
     module_category = "MONEY"
     module_name = "Bank"
-    module_tag = "BUILDING"
+    module_tag = "LIVE"
     module_accent = "orange"
     module_tagline = "Reads statements. Flags keywords."
     module_features = [
         "Flagged transactions, vendor & party summary",
         "Tuneable watchlist per investigation",
     ]
-    module_url = "/demo/tabulator/"
+    module_url = "/bank/"
     module_order = 1

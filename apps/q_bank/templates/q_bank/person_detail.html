@@ -1,0 +1,821 @@
+<c-base title="Q-Bank | Auditee: {{ person.full_name }}">
+
+    <!-- Page Header with Navigation & Actions -->
+    <c-page_header 
+        title="{{ person.full_name }}" 
+        subtitle="{% if person.department %}{{ person.department }}{% endif %}{% if person.designation %} • {{ person.designation }}{% endif %}{% if person.employee_id %} • ID: {{ person.employee_id }}{% endif %} • {{ accounts|length }} Bank Statement(s)" 
+        icon="fa-solid fa-user-tie"
+        icon_color="text-emerald-400"
+        category="Financial Forensics" 
+        section="Person Statement Profile">
+        
+        <div class="flex items-center gap-2">
+            <a href="{% url 'q_bank:dashboard' %}" 
+               class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>All Auditees</span>
+            </a>
+
+            <button onclick="openUploadModalForPerson('{{ person.id }}', '{{ person.full_name }}')" 
+                    class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer">
+                <i class="fa-solid fa-cloud-arrow-up text-amber-400"></i>
+                <span>Add Bank Statement</span>
+            </button>
+
+            <a href="{% url 'q_bank:export_ledger_excel' %}?person_id={{ person.id }}{% if selected_account_id %}&account_id={{ selected_account_id }}{% endif %}" 
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition-all cursor-pointer">
+                <i class="fa-solid fa-file-excel"></i>
+                <span>Export Ledger (Excel)</span>
+            </a>
+        </div>
+    </c-page_header>
+
+    <!-- Top Summary KPI Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <c-stat_card 
+            title="Total Transactions" 
+            value="{{ view_metrics.total_transactions }}" 
+            subtitle="{% if selected_account %}{{ selected_account.bank_name }} Statement{% else %}Combined All Statements{% endif %}" 
+            icon="fa-solid fa-receipt" 
+            variant="slate" />
+
+        <c-stat_card 
+            title="Total Outflows (Debit)" 
+            value="₹{{ view_metrics.total_debit_formatted }}" 
+            subtitle="Total Withdrawals / Payments" 
+            icon="fa-solid fa-arrow-up-right-dots" 
+            variant="rose" />
+
+        <c-stat_card 
+            title="Total Inflows (Credit)" 
+            value="₹{{ view_metrics.total_credit_formatted }}" 
+            subtitle="Total Deposits / Receipts" 
+            icon="fa-solid fa-arrow-down-left-and-up-right-to-center" 
+            variant="emerald" />
+
+        <c-stat_card 
+            title="CDM Cash Deposits" 
+            value="{{ view_metrics.cash_deposit_count }}" 
+            subtitle="{% if view_metrics.hyundai_count > 0 %}{{ view_metrics.hyundai_count }} Hyundai Matches{% else %}0 Hyundai matches{% endif %}" 
+            icon="fa-solid fa-money-bill-transfer" 
+            variant="amber" />
+    </div>
+
+    <!-- Multi-Bank & Multi-Statement Selection Bar -->
+    <div class="bg-white dark:bg-zinc-900/90 rounded-2xl border border-slate-200 dark:border-zinc-800 p-4 mb-6 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-building-columns text-emerald-400 text-sm"></i>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                    Linked Bank Statements ({{ accounts|length }})
+                </h4>
+            </div>
+            <button onclick="openUploadModalForPerson('{{ person.id }}', '{{ person.full_name }}')"
+                    class="text-xs text-emerald-500 hover:text-emerald-400 font-semibold flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span>Attach Another Statement</span>
+            </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Combined View Pill -->
+            <a href="{% url 'q_bank:person_detail' person.id %}" 
+               class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2
+               {% if not selected_account_id %}bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20{% else %}bg-slate-100 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600{% endif %}">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>All Statements Combined</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono {% if not selected_account_id %}bg-emerald-700 text-emerald-100{% else %}bg-zinc-700 text-zinc-300{% endif %}">
+                    {{ accounts|length }} banks
+                </span>
+            </a>
+
+            <!-- Individual Bank Statement Pills -->
+            {% for acc in accounts %}
+            <a href="{% url 'q_bank:person_detail' person.id %}?account_id={{ acc.id }}" 
+               class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2
+               {% if selected_account_id == acc.id|stringformat:'s' %}bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20{% else %}bg-slate-100 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600{% endif %}">
+                <i class="fa-solid fa-vault text-[11px]"></i>
+                <span>{{ acc.bank_name }}</span>
+                {% if acc.account_number %}
+                <span class="font-mono text-[11px] opacity-80">• {{ acc.account_number }}</span>
+                {% endif %}
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono {% if selected_account_id == acc.id|stringformat:'s' %}bg-emerald-700 text-emerald-100{% else %}bg-zinc-700 text-zinc-300{% endif %}">
+                    {{ acc.total_transactions }} txns
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Section 1: Data Overview (Main Forensic Ledger Table) -->
+    <div class="mb-8 bg-white dark:bg-zinc-900/90 rounded-2xl border border-slate-200 dark:border-zinc-800 p-5 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div>
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-table-list text-emerald-400"></i>
+                    <span>Data Overview ({{ view_metrics.total_transactions }} Transactions)</span>
+                </h3>
+                <p class="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                    {% if selected_account %}
+                        Displaying records for <strong>{{ selected_account.bank_name }}</strong> (Acc: {{ selected_account.account_number|default:"N/A" }}).
+                    {% else %}
+                        Displaying aggregate records across all <strong>{{ accounts|length }}</strong> bank statement files.
+                    {% endif %}
+                </p>
+            </div>
+
+            <!-- Global Search & Controls for Tabulator -->
+            <div class="flex items-center gap-2 w-full md:w-auto">
+                <div class="relative flex-1 md:w-72">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                    <input type="text" id="overview-search" placeholder="Search transactions, entities, UTR..." 
+                           class="w-full pl-8 pr-4 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500">
+                </div>
+                <button id="overview-reset" class="px-3 py-1.5 text-xs rounded-xl bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 border border-slate-300 dark:border-zinc-700 transition cursor-pointer">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Tabulator Main Table -->
+        <div id="overview-grid" class="rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 text-xs"></div>
+    </div>
+
+    <!-- Section 2: Streamlit-Style Forensic Analysis Tabs (st.tab Component) -->
+    <div x-data="bankAnalysisTabs()" class="bg-white dark:bg-zinc-900/90 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden mb-10">
+        
+        <!-- Streamlit Tab Header Navigation Bar -->
+        <div class="border-b border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/50 px-5 pt-3">
+            <nav class="flex space-x-1 sm:space-x-4 overflow-x-auto scrollbar-none" aria-label="Tabs">
+                <!-- Tab 1: Cash Deposit -->
+                <button @click="activeTab = 'cash'"
+                        :class="activeTab === 'cash' ? 'border-rose-500 text-rose-500 dark:text-rose-400 font-bold' : 'border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 font-medium'"
+                        class="whitespace-nowrap py-3 px-3 border-b-2 text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer">
+                    <i class="fa-solid fa-money-bill-wave text-xs"></i>
+                    <span>Cash Deposit</span>
+                    {% if cdm_rows %}
+                    <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500/15 text-rose-400 border border-rose-500/30">{{ cdm_rows|length }}</span>
+                    {% endif %}
+                </button>
+
+                <!-- Tab 2: High Frequent Names -->
+                <button @click="activeTab = 'frequent_names'"
+                        :class="activeTab === 'frequent_names' ? 'border-rose-500 text-rose-500 dark:text-rose-400 font-bold' : 'border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 font-medium'"
+                        class="whitespace-nowrap py-3 px-3 border-b-2 text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer">
+                    <i class="fa-solid fa-users text-xs"></i>
+                    <span>High Frequent Names</span>
+                    {% if frequent_entities %}
+                    <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/30">{{ frequent_entities|length }}</span>
+                    {% endif %}
+                </button>
+
+                <!-- Tab 3: Frequent Transactions -->
+                <button @click="activeTab = 'frequent_txns'"
+                        :class="activeTab === 'frequent_txns' ? 'border-rose-500 text-rose-500 dark:text-rose-400 font-bold' : 'border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 font-medium'"
+                        class="whitespace-nowrap py-3 px-3 border-b-2 text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer">
+                    <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                    <span>Frequent Transactions</span>
+                </button>
+
+                <!-- Tab 4: Yearwise Credit/Debit -->
+                <button @click="activeTab = 'yearwise'"
+                        :class="activeTab === 'yearwise' ? 'border-rose-500 text-rose-500 dark:text-rose-400 font-bold' : 'border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 font-medium'"
+                        class="whitespace-nowrap py-3 px-3 border-b-2 text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer">
+                    <i class="fa-solid fa-calendar-days text-xs"></i>
+                    <span>Yearwise Credit/Debit</span>
+                </button>
+
+                <!-- Tab 5: Hyundai -->
+                <button @click="activeTab = 'hyundai'"
+                        :class="activeTab === 'hyundai' ? 'border-rose-500 text-rose-500 dark:text-rose-400 font-bold' : 'border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 font-medium'"
+                        class="whitespace-nowrap py-3 px-3 border-b-2 text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer">
+                    <i class="fa-solid fa-car text-xs"></i>
+                    <span>Hyundai</span>
+                    {% if hyundai.total_count %}
+                    <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500/15 text-blue-400 border border-blue-500/30">{{ hyundai.total_count }}</span>
+                    {% endif %}
+                </button>
+
+                <!-- Tab 6: Fuzzy Search -->
+                <button @click="activeTab = 'fuzzy'"
+                        :class="activeTab === 'fuzzy' ? 'border-rose-500 text-rose-500 dark:text-rose-400 font-bold' : 'border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 font-medium'"
+                        class="whitespace-nowrap py-3 px-3 border-b-2 text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer">
+                    <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
+                    <span>Fuzzy Search</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Tab Contents Area -->
+        <div class="p-6">
+
+            <!-- TAB 1: CASH DEPOSIT (CDM) -->
+            <div x-show="activeTab === 'cash'" x-cloak class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-base font-bold text-slate-900 dark:text-white">Rows with Cash Deposit (CDM):</h4>
+                    <span class="text-xs font-mono text-slate-400">{{ cdm_rows|length }} record(s)</span>
+                </div>
+
+                {% if cdm_rows %}
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead class="bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-sans uppercase text-[11px]">
+                            <tr>
+                                <th class="p-3">Date</th>
+                                <th class="p-3">Value Date</th>
+                                <th class="p-3">Narration</th>
+                                <th class="p-3">Name</th>
+                                <th class="p-3 text-right">Debit Amount</th>
+                                <th class="p-3 text-right">Credit Amount</th>
+                                <th class="p-3 text-right">Closing Balance</th>
+                                <th class="p-3">Source_Page</th>
+                                <th class="p-3">UPI_Name</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 dark:divide-zinc-800 text-slate-800 dark:text-zinc-200">
+                            {% for row in cdm_rows %}
+                            <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition">
+                                <td class="p-3 whitespace-nowrap">{{ row.date }}</td>
+                                <td class="p-3 whitespace-nowrap text-slate-400">{{ row.value_date }}</td>
+                                <td class="p-3 max-w-xs truncate" title="{{ row.narration }}">{{ row.narration }}</td>
+                                <td class="p-3 font-semibold text-emerald-400">{{ row.name }}</td>
+                                <td class="p-3 text-right text-rose-400">₹{{ row.debit_formatted }}</td>
+                                <td class="p-3 text-right text-emerald-400 font-bold">₹{{ row.credit_formatted }}</td>
+                                <td class="p-3 text-right text-slate-300 font-semibold">₹{{ row.closing_balance_formatted }}</td>
+                                <td class="p-3 text-slate-400">{{ row.source_page }}</td>
+                                <td class="p-3 text-slate-300">{{ row.upi_name }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-8 text-center bg-slate-50 dark:bg-zinc-800/30 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700 text-slate-400 text-xs font-mono">
+                    <i class="fa-solid fa-money-bill-transfer text-2xl text-slate-500 mb-2 block"></i>
+                    No cash deposits (CDM) detected in this statement scope.
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- TAB 2: HIGH FREQUENT NAMES -->
+            <div x-show="activeTab === 'frequent_names'" x-cloak class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-base font-bold text-slate-900 dark:text-white">Most Frequent Contacts (Credits & Debits):</h4>
+                    <a href="{% url 'q_bank:export_frequent_excel' %}?person_id={{ person.id }}{% if selected_account_id %}&account_id={{ selected_account_id }}{% endif %}" class="text-xs text-emerald-400 hover:underline flex items-center gap-1 font-semibold">
+                        <i class="fa-solid fa-file-excel"></i> Export Excel
+                    </a>
+                </div>
+
+                {% if frequent_entities %}
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead class="bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-sans uppercase text-[11px]">
+                            <tr>
+                                <th class="p-3">Name</th>
+                                <th class="p-3 text-center">Total Interactions</th>
+                                <th class="p-3 text-right">Debit Total</th>
+                                <th class="p-3 text-right">Credit Total</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 dark:divide-zinc-800 text-slate-800 dark:text-zinc-200">
+                            {% for fe in frequent_entities %}
+                            <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition">
+                                <td class="p-3 font-bold text-slate-900 dark:text-white">{{ fe.party_name }}</td>
+                                <td class="p-3 text-center">
+                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                        {{ fe.total_interactions }}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-right text-rose-400 font-semibold">₹{{ fe.debit_formatted }}</td>
+                                <td class="p-3 text-right text-emerald-400 font-semibold">₹{{ fe.credit_formatted }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-8 text-center bg-slate-50 dark:bg-zinc-800/30 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700 text-slate-400 text-xs font-mono">
+                    No recurring contact interactions found.
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- TAB 3: FREQUENT TRANSACTIONS (WITH DROPDOWNS & DAYS DIFF) -->
+            <div x-show="activeTab === 'frequent_txns'" x-cloak class="space-y-8">
+                
+                <!-- Section 1: Frequent Credit Transactions -->
+                <div class="space-y-3">
+                    <h4 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-arrow-down-left-and-up-right-to-center text-emerald-400"></i>
+                        <span>Frequent Credit Transactions</span>
+                    </h4>
+
+                    <div class="w-full md:w-96">
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Select UPI Name:</label>
+                        <select x-model="selectedCreditEntity" 
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-mono">
+                            <option value="">-- Choose Frequent Credit Entity --</option>
+                            <template x-for="item in creditChoices" :key="item.name">
+                                <option :value="item.name" x-text="item.selector"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <!-- Credit Dynamic Table -->
+                    <template x-if="selectedCreditRows.length > 0">
+                        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800 mt-3">
+                            <table class="w-full text-left text-xs font-mono">
+                                <thead class="bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-sans uppercase text-[11px]">
+                                    <tr>
+                                        <th class="p-3">Narration</th>
+                                        <th class="p-3">UPI_Name</th>
+                                        <th class="p-3">Value Date</th>
+                                        <th class="p-3 text-center">Days Diff</th>
+                                        <th class="p-3 text-right">Debit Amount</th>
+                                        <th class="p-3 text-right">Credit Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200 dark:divide-zinc-800 text-slate-800 dark:text-zinc-200">
+                                    <template x-for="r in selectedCreditRows" :key="r.narration + r.value_date">
+                                        <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50">
+                                            <td class="p-3 max-w-sm truncate" :title="r.narration" x-text="r.narration"></td>
+                                            <td class="p-3 text-emerald-400 font-semibold" x-text="r.upi_name"></td>
+                                            <td class="p-3 text-slate-400" x-text="r.value_date"></td>
+                                            <td class="p-3 text-center">
+                                                <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700" x-text="r.days_diff"></span>
+                                            </td>
+                                            <td class="p-3 text-right text-rose-400" x-text="'₹' + r.debit_formatted"></td>
+                                            <td class="p-3 text-right text-emerald-400 font-bold" x-text="'₹' + r.credit_formatted"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                    <template x-if="creditChoices.length === 0">
+                        <p class="text-xs text-slate-400 font-mono italic">No credit counterparties met the frequency threshold (>= 2 transactions).</p>
+                    </template>
+                </div>
+
+                <!-- Section 2: Frequent Debit Transactions -->
+                <div class="space-y-3 pt-6 border-t border-slate-200 dark:border-zinc-800">
+                    <h4 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-arrow-up-right-dots text-rose-400"></i>
+                        <span>Frequent Debit Transactions</span>
+                    </h4>
+
+                    <div class="w-full md:w-96">
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Select a UPI Name:</label>
+                        <select x-model="selectedDebitEntity" 
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white focus:outline-none focus:border-rose-500 font-mono">
+                            <option value="">-- Choose Frequent Debit Entity --</option>
+                            <template x-for="item in debitChoices" :key="item.name">
+                                <option :value="item.name" x-text="item.selector"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <!-- Debit Dynamic Table -->
+                    <template x-if="selectedDebitRows.length > 0">
+                        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800 mt-3">
+                            <table class="w-full text-left text-xs font-mono">
+                                <thead class="bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-sans uppercase text-[11px]">
+                                    <tr>
+                                        <th class="p-3">Narration</th>
+                                        <th class="p-3">UPI_Name</th>
+                                        <th class="p-3">Value Date</th>
+                                        <th class="p-3 text-center">Days Diff</th>
+                                        <th class="p-3 text-right">Debit Amount</th>
+                                        <th class="p-3 text-right">Credit Amount</th>
+                                        <th class="p-3 text-right">Closing balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200 dark:divide-zinc-800 text-slate-800 dark:text-zinc-200">
+                                    <template x-for="r in selectedDebitRows" :key="r.narration + r.value_date">
+                                        <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50">
+                                            <td class="p-3 max-w-sm truncate" :title="r.narration" x-text="r.narration"></td>
+                                            <td class="p-3 text-rose-400 font-semibold" x-text="r.upi_name"></td>
+                                            <td class="p-3 text-slate-400" x-text="r.value_date"></td>
+                                            <td class="p-3 text-center">
+                                                <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700" x-text="r.days_diff"></span>
+                                            </td>
+                                            <td class="p-3 text-right text-rose-400 font-bold" x-text="'₹' + r.debit_formatted"></td>
+                                            <td class="p-3 text-right text-emerald-400" x-text="'₹' + r.credit_formatted"></td>
+                                            <td class="p-3 text-right text-slate-300 font-semibold" x-text="'₹' + r.closing_balance"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                    <template x-if="debitChoices.length === 0">
+                        <p class="text-xs text-slate-400 font-mono italic">No debit counterparties met the frequency threshold (>= 2 transactions).</p>
+                    </template>
+                </div>
+            </div>
+
+            <!-- TAB 4: YEARWISE CREDIT/DEBIT -->
+            <div x-show="activeTab === 'yearwise'" x-cloak class="space-y-4">
+                <h4 class="text-base font-bold text-slate-900 dark:text-white">Yearwise Summary:</h4>
+
+                {% if yearwise %}
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800 max-w-3xl">
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead class="bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-sans uppercase text-[11px]">
+                            <tr>
+                                <th class="p-3">Year</th>
+                                <th class="p-3 text-right">Total Debit</th>
+                                <th class="p-3 text-right">Total Credit</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 dark:divide-zinc-800 text-slate-800 dark:text-zinc-200">
+                            {% for yw in yearwise %}
+                            <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50">
+                                <td class="p-3 font-bold text-slate-900 dark:text-white text-sm">{{ yw.year }}</td>
+                                <td class="p-3 text-right text-rose-400 font-semibold">₹{{ yw.total_debit_formatted }}</td>
+                                <td class="p-3 text-right text-emerald-400 font-semibold">₹{{ yw.total_credit_formatted }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-8 text-center bg-slate-50 dark:bg-zinc-800/30 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700 text-slate-400 text-xs font-mono">
+                    No timestamp entries found to compute yearwise summaries.
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- TAB 5: HYUNDAI -->
+            <div x-show="activeTab === 'hyundai'" x-cloak class="space-y-6">
+                <div>
+                    <h4 class="text-base font-bold text-slate-900 dark:text-white">Hyundai Transaction Summary</h4>
+                    <p class="text-xs text-slate-400 mt-0.5">Automated screening for internal company transfers, corporate settlements, and payroll references.</p>
+                </div>
+
+                <!-- 4 KPI Stat Cards matching screenshot -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="p-4 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
+                        <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">Total Debit</div>
+                        <div class="text-2xl font-black text-rose-500 mt-1 font-mono">₹{{ hyundai.total_debit_formatted }}</div>
+                    </div>
+                    <div class="p-4 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
+                        <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">Total Credit</div>
+                        <div class="text-2xl font-black text-emerald-500 mt-1 font-mono">₹{{ hyundai.total_credit_formatted }}</div>
+                    </div>
+                    <div class="p-4 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
+                        <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">Times Credited</div>
+                        <div class="text-2xl font-black text-slate-900 dark:text-white mt-1 font-mono">{{ hyundai.credit_count }}</div>
+                    </div>
+                    <div class="p-4 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
+                        <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">Avg Credit Value</div>
+                        <div class="text-2xl font-black text-emerald-500 mt-1 font-mono">₹{{ hyundai.avg_credit_formatted }}</div>
+                    </div>
+                </div>
+
+                <!-- Hyundai Transaction Details Table -->
+                <div class="space-y-3">
+                    <h5 class="text-sm font-bold text-slate-900 dark:text-white">Transaction Details</h5>
+
+                    {% if hyundai.rows %}
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+                        <table class="w-full text-left text-xs font-mono">
+                            <thead class="bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-sans uppercase text-[11px]">
+                                <tr>
+                                    <th class="p-3">Date</th>
+                                    <th class="p-3">Value Date</th>
+                                    <th class="p-3">Narration</th>
+                                    <th class="p-3 text-right">Debit Amount</th>
+                                    <th class="p-3 text-right">Credit Amount</th>
+                                    <th class="p-3 text-right">Closing Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 dark:divide-zinc-800 text-slate-800 dark:text-zinc-200">
+                                {% for r in hyundai.rows %}
+                                <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50">
+                                    <td class="p-3 whitespace-nowrap">{{ r.date }}</td>
+                                    <td class="p-3 whitespace-nowrap text-slate-400">{{ r.value_date }}</td>
+                                    <td class="p-3 max-w-sm truncate text-blue-400 font-semibold" title="{{ r.narration }}">{{ r.narration }}</td>
+                                    <td class="p-3 text-right text-rose-400">₹{{ r.debit_formatted }}</td>
+                                    <td class="p-3 text-right text-emerald-400 font-bold">₹{{ r.credit_formatted }}</td>
+                                    <td class="p-3 text-right text-slate-300">₹{{ r.closing_balance_formatted }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="p-8 text-center bg-slate-50 dark:bg-zinc-800/30 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700 text-slate-400 text-xs font-mono">
+                        No Hyundai-related keywords found in this statement scope.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- TAB 6: FUZZY SEARCH -->
+            <div x-show="activeTab === 'fuzzy'" x-cloak class="space-y-6">
+                <div>
+                    <h4 class="text-base font-bold text-slate-900 dark:text-white">Fuzzy Search</h4>
+                    <p class="text-xs text-slate-400 mt-0.5">High-speed sequence & partial word distance matching against transaction narrations using RapidFuzz.</p>
+                </div>
+
+                <!-- Fuzzy Search Input Controls -->
+                <div class="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-slate-200 dark:border-zinc-700 space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Enter keywords (comma separated)
+                        </label>
+                        <input type="text" x-model="fuzzyKeywords" placeholder="e.g. trust, sarla, sharma, auto"
+                               class="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white font-mono focus:outline-none focus:border-rose-500">
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-6">
+                        <div class="flex-1 min-w-[200px]">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-400">Fuzzy Match Sensitivity:</span>
+                                <span class="font-mono text-rose-400 font-bold" x-text="fuzzyThreshold + '%'"></span>
+                            </div>
+                            <input type="range" min="50" max="100" step="5" x-model="fuzzyThreshold"
+                                   class="w-full accent-rose-500 cursor-pointer">
+                        </div>
+
+                        <button @click="performFuzzySearch()" 
+                                class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/20 transition cursor-pointer flex items-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>Execute Fuzzy Match</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Fuzzy Results Table -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h5 class="text-sm font-bold text-slate-900 dark:text-white">Matched Transactions</h5>
+                        <span class="text-xs font-mono text-rose-400" x-text="fuzzyResults.length + ' match(es)'"></span>
+                    </div>
+
+                    <template x-if="fuzzyLoading">
+                        <div class="py-12 text-center text-xs text-slate-400 font-mono">
+                            <i class="fa-solid fa-circle-notch fa-spin text-xl text-rose-500 mb-2 block"></i>
+                            Scanning narrations with fuzzy token sequence engine...
+                        </div>
+                    </template>
+
+                    <template x-if="!fuzzyLoading && fuzzyResults.length > 0">
+                        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+                            <table class="w-full text-left text-xs font-mono">
+                                <thead class="bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-sans uppercase text-[11px]">
+                                    <tr>
+                                        <th class="p-3 text-center">Score</th>
+                                        <th class="p-3">Date</th>
+                                        <th class="p-3">Party Name</th>
+                                        <th class="p-3">Narration</th>
+                                        <th class="p-3 text-right">Debit</th>
+                                        <th class="p-3 text-right">Credit</th>
+                                        <th class="p-3 text-right">Closing Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200 dark:divide-zinc-800 text-slate-800 dark:text-zinc-200">
+                                    <template x-for="item in fuzzyResults" :key="item.id">
+                                        <tr class="hover:bg-slate-50 dark:hover:bg-zinc-800/50">
+                                            <td class="p-3 text-center">
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30" x-text="item.fuzzy_score + '%'"></span>
+                                            </td>
+                                            <td class="p-3 whitespace-nowrap text-slate-400" x-text="item.txn_date"></td>
+                                            <td class="p-3 font-semibold text-emerald-400" x-text="item.party_name"></td>
+                                            <td class="p-3 max-w-sm truncate text-zinc-300" :title="item.narration" x-text="item.narration"></td>
+                                            <td class="p-3 text-right text-rose-400" x-text="'₹' + item.debit_formatted"></td>
+                                            <td class="p-3 text-right text-emerald-400 font-bold" x-text="'₹' + item.credit_formatted"></td>
+                                            <td class="p-3 text-right text-slate-400" x-text="'₹' + item.closing_balance_formatted"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+
+                    <template x-if="!fuzzyLoading && fuzzyResults.length === 0 && fuzzySearched">
+                        <div class="p-8 text-center bg-slate-50 dark:bg-zinc-800/30 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700 text-slate-400 text-xs font-mono">
+                            No transactions matched the fuzzy keyword pattern with >= <span x-text="fuzzyThreshold"></span>% similarity.
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Upload Additional Statement Modal for this Person -->
+    <div id="upload-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 hidden">
+        <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl p-6 relative">
+            <button onclick="closeUploadModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-200 cursor-pointer">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-cloud-arrow-up text-emerald-400"></i>
+                <span>Attach Bank Statement to Person</span>
+            </h3>
+            <p class="text-xs text-slate-400 mb-5">Upload another bank statement for <strong>{{ person.full_name }}</strong> (Excel, CSV, Word, or PDF).</p>
+
+            <form method="POST" action="{% url 'q_bank:upload_statement' %}" enctype="multipart/form-data" class="space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="person_id" value="{{ person.id }}">
+                <input type="hidden" name="account_holder" value="{{ person.full_name }}">
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Bank Institution Name</label>
+                    <input type="text" name="bank_name" placeholder="e.g. HDFC Bank, SBI, ICICI, Axis" required
+                           class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Account / Card Number</label>
+                        <input type="text" name="account_number" placeholder="e.g. 501002984123"
+                               class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white font-mono focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Statement Label</label>
+                        <input type="text" name="statement_label" placeholder="e.g. FY 2024-25 Statement"
+                               class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Select Bank Statement File</label>
+                    <input type="file" name="statement_file" accept=".xlsx,.xls,.csv,.docx,.pdf" required
+                           class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer">
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-zinc-800">
+                    <button type="button" onclick="closeUploadModal()" class="px-4 py-2 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 cursor-pointer">
+                        Upload & Ingest Statement
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Pass JSON Data safely for Alpine Dropdown Selectors -->
+    {{ frequent_breakdown.credit_choices|json_script:"credit-choices-data" }}
+    {{ frequent_breakdown.credit_groups|json_script:"credit-groups-data" }}
+    {{ frequent_breakdown.debit_choices|json_script:"debit-choices-data" }}
+    {{ frequent_breakdown.debit_groups|json_script:"debit-groups-data" }}
+
+    <script>
+    function openUploadModalForPerson(personId, personName) {
+        document.getElementById('upload-modal').classList.remove('hidden');
+    }
+    function closeUploadModal() {
+        document.getElementById('upload-modal').classList.add('hidden');
+    }
+
+    function bankAnalysisTabs() {
+        return {
+            activeTab: 'cash',
+            
+            // Frequent Transactions State
+            creditChoices: JSON.parse(document.getElementById('credit-choices-data').textContent || '[]'),
+            creditGroups: JSON.parse(document.getElementById('credit-groups-data').textContent || '{}'),
+            selectedCreditEntity: '',
+            
+            debitChoices: JSON.parse(document.getElementById('debit-choices-data').textContent || '[]'),
+            debitGroups: JSON.parse(document.getElementById('debit-groups-data').textContent || '{}'),
+            selectedDebitEntity: '',
+
+            // Fuzzy Search State
+            fuzzyKeywords: 'trust, sarla',
+            fuzzyThreshold: 80,
+            fuzzyResults: [],
+            fuzzyLoading: false,
+            fuzzySearched: false,
+
+            init() {
+                if (this.creditChoices.length > 0) {
+                    this.selectedCreditEntity = this.creditChoices[0].name;
+                }
+                if (this.debitChoices.length > 0) {
+                    this.selectedDebitEntity = this.debitChoices[0].name;
+                }
+            },
+
+            get selectedCreditRows() {
+                if (!this.selectedCreditEntity || !this.creditGroups[this.selectedCreditEntity]) {
+                    return [];
+                }
+                return this.creditGroups[this.selectedCreditEntity];
+            },
+
+            get selectedDebitRows() {
+                if (!this.selectedDebitEntity || !this.debitGroups[this.selectedDebitEntity]) {
+                    return [];
+                }
+                return this.debitGroups[this.selectedDebitEntity];
+            },
+
+            performFuzzySearch() {
+                this.fuzzyLoading = true;
+                this.fuzzySearched = true;
+                const params = new URLSearchParams({
+                    person_id: '{{ person.id }}',
+                    {% if selected_account_id %}account_id: '{{ selected_account_id }}',{% endif %}
+                    keywords: this.fuzzyKeywords,
+                    threshold: this.fuzzyThreshold
+                });
+
+                fetch(`{% url 'q_bank:fuzzy_search_api' %}?${params.toString()}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        this.fuzzyResults = data.matches || [];
+                        this.fuzzyLoading = false;
+                    })
+                    .catch(err => {
+                        console.error('Fuzzy search error:', err);
+                        this.fuzzyLoading = false;
+                    });
+            }
+        };
+    }
+
+    // Initialize Main Tabulator Data Grid for Data Overview
+    document.addEventListener('DOMContentLoaded', function() {
+        const table = new Tabulator("#overview-grid", {
+            ajaxURL: "{% url 'q_bank:transactions_api' %}",
+            ajaxParams: { 
+                person_id: "{{ person.id }}"{% if selected_account_id %},
+                account_id: "{{ selected_account_id }}"{% endif %}
+            },
+            pagination: true,
+            paginationMode: "remote",
+            paginationSize: 20,
+            paginationSizeSelector: [10, 20, 50, 100],
+            layout: "fitColumns",
+            responsiveLayout: "collapse",
+            placeholder: "No transactions found for this selection.",
+            columns: [
+                { title: "Date", field: "value_date", width: 110, headerSort: true },
+                { title: "Value Date", field: "value_date", width: 110, headerSort: true, cssClass: "text-slate-400 font-mono" },
+                { title: "Narration", field: "narration", minWidth: 240, tooltip: true, formatter: function(cell) {
+                    const data = cell.getRow().getData();
+                    let badge = '';
+                    if (data.is_cash_deposit) {
+                        badge += `<span class="ml-1.5 px-1.5 py-0.2 text-[9px] font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">CDM</span>`;
+                    }
+                    if (data.is_hyundai_related) {
+                        badge += `<span class="ml-1.5 px-1.5 py-0.2 text-[9px] font-bold rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">HYUNDAI</span>`;
+                    }
+                    return `<div class="truncate text-slate-800 dark:text-zinc-200 font-mono">${cell.getValue()} ${badge}</div>`;
+                }},
+                { title: "Name", field: "name", width: 160, headerSort: true, formatter: function(cell) {
+                    return `<span class="font-bold text-emerald-600 dark:text-emerald-400">${cell.getValue()}</span>`;
+                }},
+                { title: "Debit Amount", field: "debit_amount", hozAlign: "right", width: 130, headerSort: true, formatter: function(cell) {
+                    const val = cell.getValue();
+                    return val > 0 ? `<span class="text-rose-500 dark:text-rose-400 font-bold font-mono">₹${cell.getRow().getData().debit_formatted}</span>` : `<span class="text-slate-400">-</span>`;
+                }},
+                { title: "Credit Amount", field: "credit_amount", hozAlign: "right", width: 130, headerSort: true, formatter: function(cell) {
+                    const val = cell.getValue();
+                    return val > 0 ? `<span class="text-emerald-600 dark:text-emerald-400 font-bold font-mono">₹${cell.getRow().getData().credit_formatted}</span>` : `<span class="text-slate-400">-</span>`;
+                }},
+                { title: "Closing Balance", field: "closing_balance", hozAlign: "right", width: 130, headerSort: true, formatter: function(cell) {
+                    return `<span class="text-slate-700 dark:text-zinc-300 font-mono font-semibold">₹${cell.getRow().getData().closing_balance_formatted}</span>`;
+                }},
+                { title: "Source_Page", field: "source_page", width: 105, headerSort: false, cssClass: "text-slate-400 font-mono" },
+                { title: "UPI_Name", field: "upi_name", width: 140, headerSort: true, cssClass: "text-slate-400 font-mono" }
+            ]
+        });
+
+        // Search Filter
+        let searchTimeout;
+        const searchInput = document.getElementById('overview-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    table.setData("{% url 'q_bank:transactions_api' %}", {
+                        person_id: "{{ person.id }}"{% if selected_account_id %},
+                        account_id: "{{ selected_account_id }}"{% endif %},
+                        search: e.target.value
+                    });
+                }, 300);
+            });
+        }
+
+        // Reset Filter
+        const resetBtn = document.getElementById('overview-reset');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', function() {
+                if (searchInput) searchInput.value = '';
+                table.setData("{% url 'q_bank:transactions_api' %}", {
+                    person_id: "{{ person.id }}"{% if selected_account_id %},
+                    account_id: "{{ selected_account_id }}"{% endif %}
+                });
+            });
+        }
+    });
+    </script>
+</c-base>
