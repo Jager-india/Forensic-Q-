@@ -166,8 +166,19 @@ def _execute_pst_ingestion(mailbox_id: str) -> None:
     Background worker process: streams pypff messages in batches of 250, inserts into DB.
     Guarantees database connection cleanup and cancellation handling.
     """
+    connection.close()
     try:
         investigation = MailboxInvestigation.objects.get(id=mailbox_id)
+        if not investigation.pst_file_path or not Path(investigation.pst_file_path).is_file():
+            investigation.status = MailboxInvestigation.IngestionStatus.FAILED
+            investigation.error_message = (
+                f"PST evidence file '{investigation.pst_file_name}' was not found on server disk. "
+                "Please upload a valid .pst file through the investigation creation modal."
+            )
+            investigation.save(update_fields=["status", "error_message", "updated_at"])
+            logger.warning("Aborted ingestion for {}: PST file does not exist on disk.", mailbox_id)
+            return
+
         pst_path = Path(investigation.pst_file_path)
         attachments_dir = Path(settings.MEDIA_ROOT) / "attachments" / str(investigation.id)
 

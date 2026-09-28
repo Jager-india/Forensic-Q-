@@ -9,4 +9,5 @@
 4. **Forensic Evidence Grid (Tabulator.js):** Search subjects, senders, and body content with debounced live search and sort columns remotely.
 5. **Slide-Over Forensic Reader:** Click any row to view message headers, extracted HTML/plain text, and download physical evidence attachments with verified SHA-256 hashes.
 6. **Communication Counterparty Matrix:** Analyze top email contacts and external domain interactions visualized in the Plotly chart.
+7. **Forensic Checkpoints Engine:** Inspect 10 critical audit flags (Currency/Monetary mentions, Without CC/BCC covert comms, Personal webmail senders, Apart from HMIL external domains, Primary bank statements & alerts, UPI transaction notifications, Default keywords: PAYMENT/GIFT/SALARY/TAX/LOAN/CIBIL, Participant search, and Date range filtering) with live KPI counters, instant filtering, badge flags, and one-click Excel evidence export.
 

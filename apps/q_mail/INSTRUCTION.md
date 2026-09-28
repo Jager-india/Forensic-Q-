@@ -8,6 +8,7 @@ It provides:
 3. **Worker Liveness & Heartbeats:** Periodic timestamp updates (`last_heartbeat_at`) enabling automatic detection and one-click recovery of stalled ingestion threads after server reload.
 4. **Graceful Cancellation & Resource Cleanup:** Clean mid-flight worker cancellation with partial evidence preservation and explicit `connection.close()` database connection leak prevention.
 5. **Server-Side Data Grid:** Tabulator.js remote paginated grid with composite indexes across 500,000+ emails.
+6. **10 Forensic Checkpoints Engine:** Regex, domain classification, and keyword matching engine (`backend/checkpoints.py`) for automated detection of monetary mentions, covert 1-on-1 comms, personal webmail usage, external non-HMIL domains, bank alerts, UPI notifications, and forensic keywords.
 
 ---
 

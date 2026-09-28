@@ -1,4 +1,4 @@
-<c-base title="{{ investigation.audit_ref }} | Q-Mail Workstation">
+<c-base title="{{ investigation.audit_ref }} | Q-Mail Forensic Workstation">
 
     <!-- Page Header with Custodian Details -->
     <c-page_header 
@@ -9,10 +9,16 @@
         category="Q-Mail" 
         section="Investigation">
         
-        <a href="{% url 'q_mail:list' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 transition">
-            <i class="fa-solid fa-arrow-left text-[10px]"></i>
-            <span>All Audits</span>
-        </a>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'q_mail:list' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 transition">
+                <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                <span>All Audits</span>
+            </a>
+            <a id="export-excel-btn" href="{% url 'q_mail:export_checkpoint_excel' investigation.id %}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition cursor-pointer">
+                <i class="fa-solid fa-file-excel text-[11px]"></i>
+                <span>Export Evidence (Excel)</span>
+            </a>
+        </div>
     </c-page_header>
 
     <!-- Custodian & Chain of Custody Evidence Banner -->
@@ -98,20 +104,20 @@
             <div class="font-bold text-slate-900 dark:text-white">{{ investigation.get_status_display }}</div>
             <div class="text-slate-600 dark:text-zinc-300 mt-0.5 leading-relaxed">{{ investigation.error_message }}</div>
         </div>
-        <button onclick="triggerProcessing()" class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex-shrink-0 transition cursor-pointer shadow-sm">
-            <i class="fa-solid fa-rotate-right mr-1"></i> Resume Now
-        </button>
     </div>
     {% endif %}
 
-    <!-- Live Ingestion Progress Tracker (Visible when processing) -->
-    <div id="live-progress-card" class="{% if investigation.status != 'PROCESSING' %}hidden{% endif %} mb-6 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 shadow-sm">
-        <div class="flex items-center justify-between text-xs font-mono text-amber-500 font-bold mb-2">
-            <span id="live-folder-text"><i class="fa-solid fa-folder-open mr-1.5"></i>Processing Folder: {{ investigation.current_folder|default:"Inbox" }}</span>
-            <span id="live-percent-text">{{ investigation.progress_percent|floatformat:0 }}%</span>
+    <!-- Real-time Progress Bar Card (Active during extraction) -->
+    <div id="live-progress-card" class="{% if investigation.status != 'PROCESSING' and investigation.status != 'UPLOADING' %}hidden{% endif %} mb-6 p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-purple-500/30 shadow-lg shadow-purple-500/5 space-y-3">
+        <div class="flex items-center justify-between text-xs font-mono">
+            <span id="live-folder-text" class="text-purple-600 dark:text-purple-400 font-bold flex items-center gap-2">
+                <i class="fa-solid fa-folder-open"></i>
+                <span>Processing Folder: {{ investigation.current_folder|default:"Root" }}</span>
+            </span>
+            <span id="live-percent-text" class="text-slate-800 dark:text-zinc-200 font-black">{{ investigation.progress_percent|floatformat:1 }}%</span>
         </div>
-        <div class="w-full h-2 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden mb-2">
-            <div id="live-progress-bar" class="h-full bg-amber-500 rounded-full transition-all duration-300" style="width: {{ investigation.progress_percent }}%;"></div>
+        <div class="w-full h-2.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div id="live-progress-bar" class="h-full bg-gradient-to-r from-purple-600 to-indigo-500 rounded-full transition-all duration-300" style="width: {{ investigation.progress_percent }}%;"></div>
         </div>
         <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 dark:text-zinc-500">
             <span id="live-count-text">{{ investigation.processed_messages_count }} Messages Ingested</span>
@@ -119,76 +125,316 @@
         </div>
     </div>
 
-    <!-- Top KPI Metrics -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <c-stat_card 
-            title="Messages Extracted" 
-            value="{{ summary.total_emails }}" 
-            subtitle="Indexed in Database" 
-            icon="fa-solid fa-envelopes-bulk" 
-            variant="purple" />
-            
-        <c-stat_card 
-            title="Physical Attachments" 
-            value="{{ summary.total_attachments }}" 
-            subtitle="With SHA-256 Hashes" 
-            icon="fa-solid fa-paperclip" 
-            variant="sky" />
-            
-        <c-stat_card 
-            title="Date Span" 
-            value="{% if summary.earliest_sent %}{{ summary.earliest_sent|date:'M Y' }} - {{ summary.latest_sent|date:'M Y' }}{% else %}N/A{% endif %}" 
-            subtitle="Timeline Coverage" 
-            icon="fa-solid fa-calendar-days" 
-            variant="slate" />
-            
-        <c-stat_card 
-            title="Attachments Ratio" 
-            value="{{ summary.with_attachments }} / {{ summary.total_emails }}" 
-            subtitle="Emails with Files" 
-            icon="fa-solid fa-file-lines" 
-            variant="emerald" />
-    </div>
+    <!-- Main Navigation Workspace Tabs (Alpine.js Powered) -->
+    <div x-data="{ activeWorkspaceTab: 'checkpoints' }" class="space-y-6">
 
-    <!-- Analytics & Communication Graph Section -->
-    {% if chart_html %}
-    <div class="mb-6">
-        <c-chart title="Top Communication Counterparties" subtitle="Direct message frequency matrix for auditee network identification." icon="fa-solid fa-chart-bar" figure_html="{{ chart_html|safe }}" />
-    </div>
-    {% endif %}
+        <!-- Top Workstation Tab Bar -->
+        <div class="flex items-center justify-between border-b border-slate-200 dark:border-zinc-800 pb-2">
+            <div class="flex items-center gap-3">
+                <button @click="activeWorkspaceTab = 'checkpoints'; setTimeout(applyFilters, 50)"
+                        :class="activeWorkspaceTab === 'checkpoints' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20 border-purple-500' : 'bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-800 hover:border-purple-500/40'"
+                        class="px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-shield-halved text-xs"></i>
+                    <span>Forensic Checkpoints</span>
+                    <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono"
+                          :class="activeWorkspaceTab === 'checkpoints' ? 'bg-purple-700 text-purple-100' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'">
+                        {{ summary.checkpoints.total_flagged }} flagged
+                    </span>
+                </button>
 
-    <!-- Filter Toolbar -->
-    <div class="mb-4 p-4 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex flex-wrap items-center gap-3 flex-1">
-            <div class="relative flex-1 min-w-[220px]">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input type="text" id="search-input" placeholder="Search subjects, senders, message body..." 
-                       class="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition">
+                <button @click="activeWorkspaceTab = 'all_ledger'; setTimeout(applyFilters, 50)"
+                        :class="activeWorkspaceTab === 'all_ledger' ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20 border-purple-500' : 'bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-800 hover:border-purple-500/40'"
+                        class="px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-list-check text-xs"></i>
+                    <span>All Messages Ledger</span>
+                    <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono"
+                          :class="activeWorkspaceTab === 'all_ledger' ? 'bg-purple-700 text-purple-100' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400'">
+                        {{ summary.total_emails }}
+                    </span>
+                </button>
             </div>
 
-            {% if summary.folders %}
-            <select id="folder-select"
-                    class="px-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition">
-                <option value="">All Mail Folders ({{ summary.folders|length }})</option>
-                {% for f in summary.folders %}
-                <option value="{{ f }}">{{ f }}</option>
-                {% endfor %}
-            </select>
+            <div class="text-xs font-mono text-slate-400 hidden sm:block">
+                {{ summary.total_attachments }} Attachments &bull; {{ summary.with_attachments }} Emails with Files
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB 1: FORENSIC CHECKPOINTS WORKSPACE (Core Request)           -->
+        <!-- ============================================================ -->
+        <div x-show="activeWorkspaceTab === 'checkpoints'" x-cloak class="space-y-6">
+
+            <!-- Checkpoints Overview Grid -->
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-purple-400"></i>
+                            <span>Audit Checkpoint Categories</span>
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            Click any checkpoint card below to instantly filter evidence matching specific risk profiles.
+                        </p>
+                    </div>
+                    <span id="active-filter-badge" class="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800/50">
+                        Active: All Checkpoints
+                    </span>
+                </div>
+
+                <!-- 6 Interactive Checkpoint KPI Cards -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    
+                    <!-- 1. Currency Mentions -->
+                    <button type="button" onclick="selectCheckpoint('currency', 'Currency Mentions')" 
+                            class="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-amber-500/60 dark:hover:border-amber-500/50 text-left transition shadow-sm group cursor-pointer">
+                        <div class="flex items-center justify-between text-amber-500 mb-2">
+                            <i class="fa-solid fa-coins text-base"></i>
+                            <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/20">₹ / $ / INR</span>
+                        </div>
+                        <div class="text-xl font-black text-slate-900 dark:text-white font-mono">{{ summary.checkpoints.currency_count }}</div>
+                        <div class="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 group-hover:text-amber-400 transition truncate">Currency Mentions</div>
+                    </button>
+
+                    <!-- 2. Direct 1-on-1 (Without CC/BCC) -->
+                    <button type="button" onclick="selectCheckpoint('no_cc_bcc', '1-on-1 Direct (No CC/BCC)')" 
+                            class="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-sky-500/60 dark:hover:border-sky-500/50 text-left transition shadow-sm group cursor-pointer">
+                        <div class="flex items-center justify-between text-sky-500 mb-2">
+                            <i class="fa-solid fa-lock text-base"></i>
+                            <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-sky-500/10 border border-sky-500/20">No CC/BCC</span>
+                        </div>
+                        <div class="text-xl font-black text-slate-900 dark:text-white font-mono">{{ summary.checkpoints.no_cc_bcc_count }}</div>
+                        <div class="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 group-hover:text-sky-400 transition truncate">Direct Covert</div>
+                    </button>
+
+                    <!-- 3. Personal Webmail Senders -->
+                    <button type="button" onclick="selectCheckpoint('personal_mail', 'Personal Webmail Senders')" 
+                            class="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-purple-500/60 dark:hover:border-purple-500/50 text-left transition shadow-sm group cursor-pointer">
+                        <div class="flex items-center justify-between text-purple-500 mb-2">
+                            <i class="fa-solid fa-envelope text-base"></i>
+                            <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/10 border border-purple-500/20">Gmail/Yahoo</span>
+                        </div>
+                        <div class="text-xl font-black text-slate-900 dark:text-white font-mono">{{ summary.checkpoints.personal_sender_count }}</div>
+                        <div class="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 group-hover:text-purple-400 transition truncate">Personal Mail ID</div>
+                    </button>
+
+                    <!-- 4. Apart from HMIL (Non-HMIL) -->
+                    <button type="button" onclick="selectCheckpoint('non_hmil', 'External (Non-HMIL)')" 
+                            class="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-slate-400 dark:hover:border-zinc-500 text-left transition shadow-sm group cursor-pointer">
+                        <div class="flex items-center justify-between text-slate-400 mb-2">
+                            <i class="fa-solid fa-building-slash text-base"></i>
+                            <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-500/10 border border-slate-500/20">External</span>
+                        </div>
+                        <div class="text-xl font-black text-slate-900 dark:text-white font-mono">{{ summary.checkpoints.non_hmil_count }}</div>
+                        <div class="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 group-hover:text-slate-300 transition truncate">Apart from HMIL</div>
+                    </button>
+
+                    <!-- 5. Primary Bank Statements & Alerts -->
+                    <button type="button" onclick="selectCheckpoint('primary_bank', 'Primary Bank Alerts')" 
+                            class="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-emerald-500/60 dark:hover:border-emerald-500/50 text-left transition shadow-sm group cursor-pointer">
+                        <div class="flex items-center justify-between text-emerald-500 mb-2">
+                            <i class="fa-solid fa-building-columns text-base"></i>
+                            <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20">HDFC/SBI</span>
+                        </div>
+                        <div class="text-xl font-black text-slate-900 dark:text-white font-mono">{{ summary.checkpoints.primary_bank_count }}</div>
+                        <div class="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 group-hover:text-emerald-400 transition truncate">Primary Banks</div>
+                    </button>
+
+                    <!-- 6. UPI Payments & Receipts -->
+                    <button type="button" onclick="selectCheckpoint('upi_payments', 'UPI Payment Alerts')" 
+                            class="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-indigo-500/60 dark:hover:border-indigo-500/50 text-left transition shadow-sm group cursor-pointer">
+                        <div class="flex items-center justify-between text-indigo-500 mb-2">
+                            <i class="fa-solid fa-mobile-screen text-base"></i>
+                            <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-500/10 border border-indigo-500/20">PhonePe/GPay</span>
+                        </div>
+                        <div class="text-xl font-black text-slate-900 dark:text-white font-mono">{{ summary.checkpoints.upi_payment_count }}</div>
+                        <div class="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 group-hover:text-indigo-400 transition truncate">UPI Payments</div>
+                    </button>
+
+                </div>
+            </div>
+
+            <!-- Default Keywords Filter Pill Bar -->
+            <div class="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-sm space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-tags text-rose-400"></i>
+                        <span>Default Keywords Triage</span>
+                    </span>
+                    <span class="text-[11px] font-mono text-slate-400">{{ summary.checkpoints.total_keyword_hits }} keyword matches</span>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                    <button type="button" onclick="selectCheckpoint('default_keywords', 'All Default Keywords')" 
+                            class="px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 transition cursor-pointer">
+                        All Default Keywords ({{ summary.checkpoints.total_keyword_hits }})
+                    </button>
+                    {% for kw, count in summary.checkpoints.default_keywords.items %}
+                    <button type="button" onclick="selectCheckpoint('{{ kw }}', 'Keyword: {{ kw }}')" 
+                            class="px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700 transition cursor-pointer">
+                        {{ kw }} <span class="text-rose-400 font-bold">({{ count }})</span>
+                    </button>
+                    {% endfor %}
+                    <button type="button" onclick="selectCheckpoint('all', 'All Checkpoints')" 
+                            class="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 underline cursor-pointer">
+                        Clear Checkpoint Filter
+                    </button>
+                </div>
+            </div>
+
+            <!-- Advanced Investigator Search & Filter Toolbar -->
+            <div class="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-sm space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    
+                    <!-- 1. Participant {name} filter -->
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Sent / Received by {Name or Email}
+                        </label>
+                        <div class="relative">
+                            <i class="fa-solid fa-user absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                            <input type="text" id="filter-participant" placeholder="e.g. Rajesh, vendor@domain" 
+                                   class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 font-mono">
+                        </div>
+                    </div>
+
+                    <!-- 2. Date Range: Start Date -->
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Date From {date}
+                        </label>
+                        <input type="date" id="filter-start-date"
+                               class="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 font-mono">
+                    </div>
+
+                    <!-- 3. Date Range: End Date -->
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Date To {date}
+                        </label>
+                        <input type="date" id="filter-end-date"
+                               class="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 font-mono">
+                    </div>
+
+                    <!-- 4. Custom User Specified Keyword -->
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Custom Keyword (User Specified)
+                        </label>
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                            <input type="text" id="filter-custom-keyword" placeholder="e.g. tender, offshore, cash" 
+                                   class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 font-mono">
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-zinc-800">
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="applyFilters()" 
+                                class="px-4 py-1.5 text-xs font-bold rounded-lg bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/20 transition cursor-pointer flex items-center gap-1.5">
+                            <i class="fa-solid fa-filter"></i>
+                            <span>Apply Filters</span>
+                        </button>
+                        <button type="button" onclick="resetFilters()" 
+                                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 transition cursor-pointer">
+                            Reset All
+                        </button>
+                    </div>
+
+                    <div class="text-[11px] font-mono text-slate-400">
+                        Click any evidence row to inspect email headers, full body & attachments
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB 2: ALL MESSAGES LEDGER (Standard Mail View)               -->
+        <!-- ============================================================ -->
+        <div x-show="activeWorkspaceTab === 'all_ledger'" x-cloak class="space-y-6">
+
+            <!-- Top KPI Metrics -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <c-stat_card 
+                    title="Messages Extracted" 
+                    value="{{ summary.total_emails }}" 
+                    subtitle="Indexed in Database" 
+                    icon="fa-solid fa-envelopes-bulk" 
+                    variant="purple" />
+                    
+                <c-stat_card 
+                    title="Physical Attachments" 
+                    value="{{ summary.total_attachments }}" 
+                    subtitle="With SHA-256 Hashes" 
+                    icon="fa-solid fa-paperclip" 
+                    variant="sky" />
+                    
+                <c-stat_card 
+                    title="Date Span" 
+                    value="{% if summary.earliest_sent %}{{ summary.earliest_sent|date:'M Y' }} - {{ summary.latest_sent|date:'M Y' }}{% else %}N/A{% endif %}" 
+                    subtitle="Timeline Coverage" 
+                    icon="fa-solid fa-calendar-days" 
+                    variant="slate" />
+                    
+                <c-stat_card 
+                    title="Attachments Ratio" 
+                    value="{{ summary.with_attachments }} / {{ summary.total_emails }}" 
+                    subtitle="Emails with Files" 
+                    icon="fa-solid fa-file-lines" 
+                    variant="emerald" />
+            </div>
+
+            <!-- Analytics & Communication Graph Section -->
+            {% if chart_html %}
+            <div>
+                <c-chart title="Top Communication Counterparties" subtitle="Direct message frequency matrix for auditee network identification." icon="fa-solid fa-chart-bar" figure_html="{{ chart_html|safe }}" />
+            </div>
             {% endif %}
 
-            <button type="button" onclick="resetFilters()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 transition">
-                Reset
-            </button>
+            <!-- Quick Filter Toolbar for Standard Ledger -->
+            <div class="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-3 flex-1">
+                    <div class="relative flex-1 min-w-[220px]">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="search-input" placeholder="Search subjects, senders, message body..." 
+                               class="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition">
+                    </div>
+
+                    {% if summary.folders %}
+                    <select id="folder-select"
+                            class="px-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition">
+                        <option value="">All Mail Folders ({{ summary.folders|length }})</option>
+                        {% for f in summary.folders %}
+                        <option value="{{ f }}">{{ f }}</option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
+
+                    <button type="button" onclick="resetFilters()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 transition cursor-pointer">
+                        Reset
+                    </button>
+                </div>
+            </div>
+
         </div>
 
-        <div class="text-xs font-mono text-slate-400 dark:text-zinc-500">
-            Click any row to open the forensic reader
-        </div>
-    </div>
+        <!-- ============================================================ -->
+        <!-- SHARED: TABULATOR.JS EVIDENCE DATA GRID                       -->
+        <!-- ============================================================ -->
+        <div class="bg-white dark:bg-zinc-900/90 rounded-2xl border border-slate-200 dark:border-zinc-800 p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-table-list text-purple-400"></i>
+                    <span>Evidence Emails Ledger</span>
+                </h4>
+                <span class="text-xs font-mono text-slate-400">Interactive Forensic Grid</span>
+            </div>
 
-    <!-- Tabulator.js Evidence Data Grid -->
-    <div class="mb-8">
-        <div id="emails-table" class="rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 shadow-sm"></div>
+            <div id="emails-table" class="rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 shadow-sm text-xs"></div>
+        </div>
+
     </div>
 
     <!-- Slide-Over Email Reader Drawer -->
@@ -200,7 +446,7 @@
                 <span class="text-[10px] font-mono uppercase tracking-widest text-purple-400 font-bold">Email Forensic Inspector</span>
                 <h3 id="drawer-subject" class="text-base font-bold text-slate-900 dark:text-white mt-0.5 line-clamp-1">Subject</h3>
             </div>
-            <button onclick="closeEmailDrawer()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800 transition">
+            <button onclick="closeEmailDrawer()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer">
                 <i class="fa-solid fa-xmark text-sm"></i>
             </button>
         </div>
@@ -243,31 +489,76 @@
     <script>
         let table = null;
         let debounceTimer = null;
+        let currentCheckpoint = 'all';
+
+        function selectCheckpoint(checkpointName, label) {
+            currentCheckpoint = checkpointName;
+            const badge = document.getElementById('active-filter-badge');
+            if (badge) {
+                badge.innerText = `Active: ${label}`;
+            }
+            updateExportLink();
+            applyFilters();
+        }
+
+        function updateExportLink() {
+            const btn = document.getElementById('export-excel-btn');
+            if (btn) {
+                const params = new URLSearchParams({
+                    checkpoint: currentCheckpoint,
+                    participant_name: document.getElementById('filter-participant')?.value || '',
+                    start_date: document.getElementById('filter-start-date')?.value || '',
+                    end_date: document.getElementById('filter-end-date')?.value || '',
+                    custom_keyword: document.getElementById('filter-custom-keyword')?.value || '',
+                    search: document.getElementById('search-input')?.value || '',
+                });
+                btn.href = `{% url 'q_mail:export_checkpoint_excel' investigation.id %}?${params.toString()}`;
+            }
+        }
 
         function applyFilters() {
+            updateExportLink();
             if (table) {
                 table.setData();
             }
         }
 
         function resetFilters() {
+            currentCheckpoint = 'all';
             const search = document.getElementById('search-input');
             const folder = document.getElementById('folder-select');
+            const participant = document.getElementById('filter-participant');
+            const startDate = document.getElementById('filter-start-date');
+            const endDate = document.getElementById('filter-end-date');
+            const customKeyword = document.getElementById('filter-custom-keyword');
+            const badge = document.getElementById('active-filter-badge');
+
             if (search) search.value = '';
             if (folder) folder.value = '';
+            if (participant) participant.value = '';
+            if (startDate) startDate.value = '';
+            if (endDate) endDate.value = '';
+            if (customKeyword) customKeyword.value = '';
+            if (badge) badge.innerText = 'Active: All Checkpoints';
+
             applyFilters();
         }
 
         document.addEventListener("DOMContentLoaded", function() {
-            // Live Search with 300ms Debounce
-            document.getElementById('search-input')?.addEventListener('input', function() {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(applyFilters, 300);
+            // Live Search inputs with 300ms Debounce
+            const debouncedInputs = ['search-input', 'filter-participant', 'filter-custom-keyword'];
+            debouncedInputs.forEach(id => {
+                document.getElementById(id)?.addEventListener('input', function() {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(applyFilters, 300);
+                });
             });
 
-            // Instant Folder Filter
-            document.getElementById('folder-select')?.addEventListener('change', function() {
-                applyFilters();
+            // Date inputs
+            ['filter-start-date', 'filter-end-date', 'folder-select'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', function() {
+                    applyFilters();
+                });
             });
 
             // Remote Paginated Tabulator Grid
@@ -276,8 +567,13 @@
                 ajaxConfig: "GET",
                 ajaxParams: function() {
                     return {
+                        checkpoint: currentCheckpoint,
                         search: document.getElementById('search-input')?.value || '',
                         folder: document.getElementById('folder-select')?.value || '',
+                        participant_name: document.getElementById('filter-participant')?.value || '',
+                        start_date: document.getElementById('filter-start-date')?.value || '',
+                        end_date: document.getElementById('filter-end-date')?.value || '',
+                        custom_keyword: document.getElementById('filter-custom-keyword')?.value || '',
                     };
                 },
                 pagination: true,
@@ -288,22 +584,51 @@
                 filterMode: "remote",
                 layout: "fitColumns",
                 responsiveLayout: "collapse",
-                placeholder: "No emails found matching your filters.",
+                placeholder: "No emails found matching the selected checkpoint and filters.",
                 columns: [
-                    { title: "Sent Date (UTC)", field: "sent_date", width: 150, headerSort: true },
+                    { 
+                        title: "Checkpoint Flags", 
+                        field: "badges", 
+                        minWidth: 160,
+                        headerSort: false,
+                        formatter: function(cell) {
+                            const badges = cell.getValue() || [];
+                            if (!badges || badges.length === 0) {
+                                return `<span class="text-slate-400 font-mono text-[10px]">-</span>`;
+                            }
+                            return `<div class="flex flex-wrap gap-1">` + badges.map(b => {
+                                const variantClass = {
+                                    amber: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+                                    sky: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+                                    purple: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+                                    emerald: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+                                    indigo: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+                                    rose: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+                                    slate: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+                                }[b.variant] || 'bg-slate-500/15 text-slate-400 border-slate-500/30';
+
+                                return `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold font-mono border ${variantClass} flex items-center gap-1"><i class="${b.icon} text-[8px]"></i>${b.label}</span>`;
+                            }).join('') + `</div>`;
+                        }
+                    },
+                    { title: "Sent Date (UTC)", field: "sent_date", width: 130, headerSort: true },
                     { 
                         title: "Sender", 
                         field: "sender", 
-                        minWidth: 180,
+                        minWidth: 160,
                         headerSort: true,
                         formatter: function(cell) {
-                            return `<span class="font-semibold text-slate-900 dark:text-white">${cell.getValue()}</span>`;
+                            const row = cell.getRow().getData();
+                            return `<div>
+                                <div class="font-bold text-slate-900 dark:text-white truncate">${cell.getValue()}</div>
+                                <div class="text-[10px] font-mono text-slate-400 truncate">${row.sender_email || ''}</div>
+                            </div>`;
                         }
                     },
                     { 
                         title: "Subject", 
                         field: "subject", 
-                        minWidth: 260,
+                        minWidth: 240,
                         headerSort: true,
                         formatter: function(cell) {
                             const val = cell.getValue() || "(No Subject)";
@@ -313,29 +638,31 @@
                     { 
                         title: "Folder", 
                         field: "folder", 
-                        width: 140,
+                        width: 120,
                         headerSort: true,
                         formatter: function(cell) {
-                            return `<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400">${cell.getValue()}</span>`;
+                            return `<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 truncate block">${cell.getValue()}</span>`;
                         }
                     },
                     { 
-                        title: "Files", 
-                        field: "attachment_count", 
+                        title: "Risk", 
+                        field: "risk_score", 
                         width: 80, 
                         hozAlign: "center",
                         headerSort: true,
                         formatter: function(cell) {
-                            const count = cell.getValue();
-                            if (count > 0) {
-                                return `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800/50"><i class="fa-solid fa-paperclip mr-0.5"></i>${count}</span>`;
+                            const score = cell.getValue() || 0;
+                            if (score >= 70) {
+                                return `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">${score}</span>`;
+                            } else if (score >= 40) {
+                                return `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">${score}</span>`;
                             }
-                            return `<span class="text-slate-300 dark:text-zinc-700">-</span>`;
+                            return `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-400 bg-slate-500/10 border border-slate-500/20">${score}</span>`;
                         }
                     },
                     { 
                         title: "Action", 
-                        width: 90, 
+                        width: 80, 
                         hozAlign: "center",
                         headerSort: false,
                         formatter: function(cell) {

@@ -21,6 +21,16 @@ urlpatterns = [
     ),
     path("investigation/<uuid:mailbox_id>/progress/", views.progress_api_view, name="progress_api"),
     path("investigation/<uuid:mailbox_id>/messages/", views.messages_api_view, name="messages_api"),
+    path(
+        "investigation/<uuid:mailbox_id>/checkpoints/",
+        views.checkpoints_summary_api_view,
+        name="checkpoints_api",
+    ),
+    path(
+        "investigation/<uuid:mailbox_id>/export/excel/",
+        views.export_checkpoint_excel_view,
+        name="export_checkpoint_excel",
+    ),
     path("email/<uuid:email_id>/", views.email_detail_api_view, name="email_detail"),
     path(
         "attachment/<uuid:attachment_id>/download/",

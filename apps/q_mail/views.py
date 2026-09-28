@@ -177,13 +177,26 @@ def progress_api_view(request: HttpRequest, mailbox_id: str) -> JsonResponse:
 def messages_api_view(request: HttpRequest, mailbox_id: str) -> JsonResponse:
     """
     High-performance paginated API endpoint for Tabulator.js data grid.
-    Supports server-side pagination, remote sorting, and multi-field search.
+    Supports server-side pagination, remote sorting, multi-field search, and forensic checkpoint filters.
     """
-    page = int(request.GET.get("page", 1))
-    page_size = int(request.GET.get("size", 25))
+    try:
+        page = int(request.GET.get("page", 1))
+    except (ValueError, TypeError):
+        page = 1
+
+    try:
+        page_size = int(request.GET.get("size", 25))
+    except (ValueError, TypeError):
+        page_size = 25
+
     search = request.GET.get("search", "").strip()
     folder = request.GET.get("folder", "").strip()
     sender = request.GET.get("sender", "").strip()
+    checkpoint = request.GET.get("checkpoint", "all").strip()
+    participant_name = request.GET.get("participant_name", "").strip()
+    start_date = request.GET.get("start_date", "").strip()
+    end_date = request.GET.get("end_date", "").strip()
+    custom_keyword = request.GET.get("custom_keyword", "").strip()
 
     has_attachments_val = request.GET.get("has_attachments")
     has_attachments = (
@@ -192,7 +205,7 @@ def messages_api_view(request: HttpRequest, mailbox_id: str) -> JsonResponse:
         else (False if has_attachments_val in ("false", "0") else None)
     )
 
-    # Handle Tabulator sort params (e.g. sort[0][field]=sent_date&sort[0][dir]=desc or sort=sent_date)
+    # Handle Tabulator sort params
     sort_field = (
         request.GET.get("sort[0][field]")
         or request.GET.get("sort_by")
@@ -209,11 +222,117 @@ def messages_api_view(request: HttpRequest, mailbox_id: str) -> JsonResponse:
         folder=folder,
         sender=sender,
         has_attachments=has_attachments,
+        checkpoint=checkpoint,
+        participant_name=participant_name,
+        start_date=start_date,
+        end_date=end_date,
+        custom_keyword=custom_keyword,
         sort_field=sort_field,
         sort_dir=sort_dir,
     )
 
     return JsonResponse(result)
+
+
+@require_GET
+def checkpoints_summary_api_view(request: HttpRequest, mailbox_id: str) -> JsonResponse:
+    """
+    Live API endpoint returning aggregate metrics across all 10 Mail Checkpoints.
+    """
+    from .selectors import get_mailbox_checkpoints_summary
+
+    summary = get_mailbox_checkpoints_summary(mailbox_id)
+    return JsonResponse({"success": True, "checkpoints": summary})
+
+
+@require_GET
+def export_checkpoint_excel_view(request: HttpRequest, mailbox_id: str) -> HttpResponse:
+    """
+    Exports filtered forensic checkpoint emails to an Excel workbook stream.
+    """
+    import io
+
+    import openpyxl
+
+    from .selectors import get_paginated_investigation_emails
+
+    checkpoint = request.GET.get("checkpoint", "all").strip()
+    participant_name = request.GET.get("participant_name", "").strip()
+    start_date = request.GET.get("start_date", "").strip()
+    end_date = request.GET.get("end_date", "").strip()
+    custom_keyword = request.GET.get("custom_keyword", "").strip()
+    search = request.GET.get("search", "").strip()
+
+    result = get_paginated_investigation_emails(
+        mailbox_id,
+        page=1,
+        page_size=20000,
+        checkpoint=checkpoint,
+        participant_name=participant_name,
+        start_date=start_date,
+        end_date=end_date,
+        custom_keyword=custom_keyword,
+        search=search,
+    )
+    rows = result.get("data", [])
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Forensic Email Checkpoints"
+
+    headers = [
+        "Sent Date (UTC)",
+        "Sender Name",
+        "Sender Email",
+        "Recipients (To)",
+        "Recipients (Cc)",
+        "Subject",
+        "Folder",
+        "Currency Mentioned",
+        "1-on-1 Direct",
+        "Personal Mail ID",
+        "Primary Bank",
+        "UPI Payment",
+        "Matched Flags",
+        "Risk Score",
+        "Risk Level",
+    ]
+    ws.append(headers)
+
+    for r in rows:
+        badge_labels = ", ".join(b["label"] for b in r.get("badges", []))
+        ws.append(
+            [
+                r.get("sent_date", ""),
+                r.get("sender", ""),
+                r.get("sender_email", ""),
+                ", ".join(r.get("recipients_to", [])),
+                ", ".join(r.get("recipients_cc", [])),
+                r.get("subject", ""),
+                r.get("folder", ""),
+                "YES" if r.get("is_currency") else "NO",
+                "YES" if r.get("is_no_cc_bcc") else "NO",
+                "YES" if r.get("is_personal_sender") else "NO",
+                "YES" if r.get("is_primary_bank") else "NO",
+                "YES" if r.get("is_upi_payment") else "NO",
+                badge_labels or "-",
+                r.get("risk_score", 0),
+                r.get("risk_level", "Low"),
+            ]
+        )
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="forensiq_mail_checkpoints_{checkpoint}.xlsx"'
+    )
+    return response
 
 
 @require_GET

@@ -66,8 +66,10 @@ class PSTStreamParser:
         """
         Opens the PST file via libpff and yields ParsedEmail objects.
         """
-        if not self.pst_path.exists():
-            raise FileNotFoundError(f"PST evidence file not found at: {self.pst_path}")
+        if not str(self.pst_path).strip() or not self.pst_path.is_file():
+            raise FileNotFoundError(
+                f"PST evidence file not found or path is not a file: '{self.pst_path}'"
+            )
 
         pst_file = pypff.file()
         pst_file.open(str(self.pst_path))
