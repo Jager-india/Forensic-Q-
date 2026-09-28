@@ -94,14 +94,14 @@ DEFAULT_MODULE_SPECS = {
         "num": "07",
         "category": "VOICE",
         "name": "Voice",
-        "tag": "BUILDING",
+        "tag": "LIVE",
         "accent": "steel",
         "tagline": "Transcribes speech. Flags intent.",
         "features": [
             "Call transcripts, entity & speaker matrix",
             "Concealment and intent detection",
         ],
-        "href": "/demo/sandbox/",
+        "href": "/voice/",
         "order": 7,
     },
     "q_ledger": {
@@ -122,14 +122,14 @@ DEFAULT_MODULE_SPECS = {
         "num": "09",
         "category": "COMMUNICATIONS",
         "name": "Chat",
-        "tag": "BUILDING",
+        "tag": "LIVE",
         "accent": "steel",
         "tagline": "Reconstructs team chat threads.",
         "features": [
             "Teams, Slack & WhatsApp thread correlation",
             "Off-the-record chat keyword alerts",
         ],
-        "href": "/demo/sandbox/",
+        "href": "/chat/",
         "order": 9,
     },
 }

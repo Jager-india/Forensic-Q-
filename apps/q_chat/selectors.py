@@ -1,0 +1,165 @@
+"""
+Q-Chat Forensic Selectors
+Query, compute, and aggregate corporate chat conversations, message streams, and collusion indicators.
+"""
+
+import uuid
+from typing import Any
+
+from django.core.paginator import Paginator
+from django.db.models import Count, Max, Min, Q, QuerySet
+
+from .models import ChatChannel, ChatMessage
+
+
+def get_chat_dashboard_metrics() -> dict[str, Any]:
+    """
+    Computes global metrics for the Q-Chat dashboard.
+    """
+    total_channels = ChatChannel.objects.count()
+    total_messages = ChatMessage.objects.count()
+    flagged_messages = ChatMessage.objects.filter(risk_score__gte=50).count()
+    deleted_messages = ChatMessage.objects.filter(is_deleted=True).count()
+    media_messages = ChatMessage.objects.filter(has_media=True).count()
+
+    platforms = (
+        ChatChannel.objects.values("platform")
+        .annotate(channel_count=Count("id"), msg_count=Count("messages"))
+        .order_by("-msg_count")
+    )
+
+    top_flagged_senders = list(
+        ChatMessage.objects.filter(risk_score__gte=50)
+        .values("sender_name")
+        .annotate(flagged_count=Count("id"))
+        .order_by("-flagged_count")[:6]
+    )
+
+    return {
+        "total_channels": total_channels,
+        "total_messages": total_messages,
+        "flagged_messages": flagged_messages,
+        "deleted_messages": deleted_messages,
+        "media_messages": media_messages,
+        "platforms": list(platforms),
+        "top_flagged_senders": top_flagged_senders,
+    }
+
+
+def get_all_chat_channels() -> QuerySet[ChatChannel]:
+    """
+    Retrieves all chat channels ordered by most recent message.
+    """
+    return ChatChannel.objects.all().order_by("-last_message_at", "-created_at")
+
+
+def get_chat_channel_by_id(channel_id: str | uuid.UUID) -> ChatChannel | None:
+    """
+    Retrieves a single channel by primary key.
+    """
+    try:
+        return ChatChannel.objects.get(id=channel_id)
+    except (ChatChannel.DoesNotExist, ValueError):
+        return None
+
+
+def get_paginated_chat_messages(
+    channel_id: str | uuid.UUID,
+    *,
+    page: int = 1,
+    page_size: int = 50,
+    search: str = "",
+    sender: str = "",
+    flagged_only: bool = False,
+    media_only: bool = False,
+    deleted_only: bool = False,
+    sort_dir: str = "asc",  # 'asc' for chronological chat stream, 'desc' for latest first
+) -> dict[str, Any]:
+    """
+    Retrieves paginated messages for a specific channel with flexible filters.
+    """
+    qs = ChatMessage.objects.filter(channel_id=channel_id)
+
+    if search:
+        s = search.strip()
+        qs = qs.filter(Q(message_text__icontains=s) | Q(sender_name__icontains=s))
+
+    if sender:
+        qs = qs.filter(sender_name__iexact=sender.strip())
+
+    if flagged_only:
+        qs = qs.filter(risk_score__gte=50)
+
+    if media_only:
+        qs = qs.filter(has_media=True)
+
+    if deleted_only:
+        qs = qs.filter(is_deleted=True)
+
+    order_prefix = "-" if sort_dir.lower() == "desc" else ""
+    qs = qs.order_by(f"{order_prefix}sent_at", f"{order_prefix}created_at")
+
+    paginator = Paginator(qs, page_size)
+    page_obj = paginator.get_page(page)
+
+    rows = []
+    for msg in page_obj:
+        rows.append(
+            {
+                "id": str(msg.id),
+                "sender_name": msg.sender_name,
+                "sender_handle": msg.sender_handle,
+                "sent_at": msg.sent_at.strftime("%d %b %Y, %H:%M:%S") if msg.sent_at else "-",
+                "sent_time": msg.sent_at.strftime("%H:%M") if msg.sent_at else "-",
+                "sent_date": msg.sent_at.strftime("%d %b %Y") if msg.sent_at else "-",
+                "message_text": msg.message_text,
+                "has_media": msg.has_media,
+                "media_type": msg.media_type,
+                "media_filename": msg.media_filename,
+                "is_deleted": msg.is_deleted,
+                "is_edited": msg.is_edited,
+                "risk_score": msg.risk_score,
+                "flagged_terms": msg.flagged_terms,
+            }
+        )
+
+    return {
+        "data": rows,
+        "total_count": paginator.count,
+        "last_page": paginator.num_pages,
+        "current_page": page_obj.number,
+        "has_next": page_obj.has_next(),
+        "has_previous": page_obj.has_previous(),
+    }
+
+
+def get_chat_participants_summary(channel_id: str | uuid.UUID) -> list[dict[str, Any]]:
+    """
+    Summarizes participants in a channel with message counts and flagged message counts.
+    """
+    raw_participants = (
+        ChatMessage.objects.filter(channel_id=channel_id)
+        .values("sender_name")
+        .annotate(
+            total_msgs=Count("id"),
+            flagged_msgs=Count("id", filter=Q(risk_score__gte=50)),
+            deleted_msgs=Count("id", filter=Q(is_deleted=True)),
+            first_seen=Min("sent_at"),
+            last_seen=Max("sent_at"),
+        )
+        .order_by("-total_msgs")
+    )
+
+    results = []
+    for p in raw_participants:
+        results.append(
+            {
+                "sender_name": p["sender_name"],
+                "total_msgs": p["total_msgs"],
+                "flagged_msgs": p["flagged_msgs"],
+                "deleted_msgs": p["deleted_msgs"],
+                "first_seen": p["first_seen"].strftime("%d %b %Y") if p["first_seen"] else "-",
+                "last_seen": p["last_seen"].strftime("%d %b %Y") if p["last_seen"] else "-",
+            }
+        )
+    return results

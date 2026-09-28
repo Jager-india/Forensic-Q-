@@ -1,1 +1,97 @@
-# Create your tests here.
+"""
+Unit & Integration Tests for Q-Chat Corporate Messaging Forensics Engine
+"""
+
+from django.test import TestCase
+from django.urls import reverse
+
+from .selectors import (
+    get_chat_channel_by_id,
+    get_chat_dashboard_metrics,
+    get_chat_participants_summary,
+    get_paginated_chat_messages,
+)
+from .services import ingest_chat_export_file
+
+
+class QChatForensicTests(TestCase):
+    def setUp(self):
+        self.raw_whatsapp = (
+            "24/04/2024, 10:15 - Arun Kumar: Good morning team, please check the quote for tender L1.\n"
+            "24/04/2024, 10:16 - Rajesh M: Received. Can we discuss the commission cut off the record?\n"
+            "24/04/2024, 10:17 - Arun Kumar: <Media omitted>\n"
+            "24/04/2024, 10:18 - Rajesh M: You deleted this message\n"
+            "24/04/2024, 10:20 - Arun Kumar: Send cash payment details on personal account please.\n"
+        )
+        self.channel = ingest_chat_export_file(
+            file_obj_or_content=self.raw_whatsapp,
+            filename="whatsapp_export.txt",
+            platform="WHATSAPP",
+            channel_name="Procurement Tender Chat",
+            custodian_name="Arun Kumar",
+        )
+
+    def test_whatsapp_ingestion(self):
+        self.assertEqual(self.channel.total_messages, 5)
+        self.assertEqual(self.channel.participant_count, 2)
+        self.assertTrue(self.channel.flagged_messages_count >= 2)
+
+        # Check deleted message flag
+        deleted_msg = self.channel.messages.filter(is_deleted=True).first()
+        self.assertIsNotNone(deleted_msg)
+        self.assertEqual(deleted_msg.sender_name, "Rajesh M")
+
+        # Check media attachment flag
+        media_msg = self.channel.messages.filter(has_media=True).first()
+        self.assertIsNotNone(media_msg)
+        self.assertEqual(media_msg.media_type, "IMAGE")
+
+    def test_json_ingestion(self):
+        json_content = (
+            '{"messages": ['
+            '{"sender_name": "Supplier Lead", "sent_at": "2024-05-01T12:00:00Z", "message_text": "Here is the revised tender proposal"},'
+            '{"sender_name": "Buyer", "sent_at": "2024-05-01T12:05:00Z", "message_text": "Ensure we get 10% cash discount off the record"}'
+            "]}"
+        )
+        ch2 = ingest_chat_export_file(
+            file_obj_or_content=json_content,
+            filename="teams_export.json",
+            platform="TEAMS",
+            channel_name="Supplier Teams Thread",
+        )
+        self.assertEqual(ch2.total_messages, 2)
+        self.assertTrue(ch2.flagged_messages_count >= 1)
+
+    def test_selectors(self):
+        metrics = get_chat_dashboard_metrics()
+        self.assertGreaterEqual(metrics["total_channels"], 1)
+        self.assertGreaterEqual(metrics["total_messages"], 5)
+
+        participants = get_chat_participants_summary(self.channel.id)
+        self.assertEqual(len(participants), 2)
+
+        paginated = get_paginated_chat_messages(self.channel.id, page=1, page_size=10)
+        self.assertEqual(paginated["total_count"], 5)
+
+    def test_views_and_endpoints(self):
+        session = self.client.session
+        session["portal_authenticated"] = True
+        session.save()
+
+        # Dashboard View
+        r_dash = self.client.get(reverse("q_chat:dashboard"))
+        self.assertEqual(r_dash.status_code, 200)
+
+        # Channel Detail View
+        r_detail = self.client.get(reverse("q_chat:channel_detail", args=[self.channel.id]))
+        self.assertEqual(r_detail.status_code, 200)
+
+        # Messages API View
+        r_api = self.client.get(reverse("q_chat:messages_api", args=[self.channel.id]))
+        self.assertEqual(r_api.status_code, 200)
+        self.assertEqual(r_api.json()["total_count"], 5)
+
+        # Delete Channel
+        r_del = self.client.post(reverse("q_chat:delete_channel", args=[self.channel.id]))
+        self.assertEqual(r_del.status_code, 302)
+        self.assertIsNone(get_chat_channel_by_id(self.channel.id))

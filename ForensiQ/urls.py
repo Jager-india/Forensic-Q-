@@ -11,6 +11,8 @@ urlpatterns = [
     path("verify/", include("q_verify.urls")),
     path("scan/", include("q_scan.urls")),
     path("bank/", include("q_bank.urls")),
+    path("chat/", include("q_chat.urls")),
+    path("voice/", include("q_voice.urls")),
 ]
 
 if settings.DEBUG:
