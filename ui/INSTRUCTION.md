@@ -14,9 +14,15 @@ ui/
 ├── INSTRUCTION.md            # Developer guide (this file)
 ├── SCHEMA.md                 # Component prop signatures & slot specifications
 ├── USER_GUIDE.md             # How to build pages using Cotton tags
+├── static/ui/                # Centralized theme tokens and scripts
+│   ├── css/theme.css         # Theme CSS, Tabulator dark styling, Aptos typography
+│   └── js/
+│       ├── tailwind-theme.js # Tailwind CSS theme configuration & palettes
+│       └── theme-manager.js  # Theme initialization & dark/light switcher
 └── templates/cotton/         # ALL REUSABLE COTTON COMPONENTS
-    ├── base.html             # Root shell with dark mode & header
-    ├── page_header.html      # Breadcrumb, title, and action toolbar
+    ├── base.html             # Root shell with dark violet theme & header
+    ├── page_header.html      # Clean title, standardized back_url navigation & action toolbar
+    ├── file_uploader.html    # Standardized drag-and-drop file upload component
     ├── stat_card.html        # KPI metric widgets (sky, emerald, amber, rose, slate)
     ├── card.html             # Standard card containers
     ├── filter_bar.html       # Multi-column instant filter toolbar
@@ -24,7 +30,7 @@ ui/
     ├── modal.html            # Forensic detail dossiers
     ├── data_grid.html        # Tabulator.js data tables
     ├── chart.html            # Plotly visualization containers
-    └── module_card.html      # Forensic engine landing card
+    └── module_card.html      # Forensic engine landing card with monochrome BUILDING state
 ```
 
 ---
@@ -40,9 +46,15 @@ ui/
 > Use `<c-slot name="actions">`. Never use `<c-slot:actions>` (triggers `[WinError 123]` on Windows systems).
 
 > [!CRITICAL]
-> **Rule 3: Use Tokenized Colors Only**
-> Use curated tokens:
-> * Dark Background: `dark:bg-zinc-950` (`#09090b`)
-> * Card Surface: `dark:bg-zinc-900` (`#18181b`)
-> * Border: `dark:border-zinc-800` (`#27272a`)
+> **Rule 3: Use Centralized Design Tokens & Aptos Font**
+> Use curated tokens defined in `ui/static/ui/css/theme.css`:
+> * Dark Canvas Background: `dark:bg-[#502D55]` (`#502D55`)
+> * Card Surface: `dark:bg-[#3d2042]` / `dark:bg-zinc-900`
+> * Border: `dark:border-[#6b3d72]` / `dark:border-zinc-800`
 > * Brand Accent: `text-amber-500` / `bg-amber-500` (`#f59e0b`)
+> * Standard Typography: Aptos (`font-sans`) and JetBrains Mono (`font-mono`)
+
+> [!CRITICAL]
+> **Rule 4: Standardize Navigation & Ingestion**
+> * Always include `<c-page_header title="Q-Name" back_url="/" />` on all module pages.
+> * Always use `<c-file_uploader />` for data ingestion rather than ad-hoc file upload forms.

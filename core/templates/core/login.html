@@ -7,14 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ForensiQ | Secure Authorization</title>
 
-    <!-- Theme Initialization Script (Prevents FOUC) -->
-    <script>
-        if (localStorage.getItem('color-theme') === 'light' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: light)').matches)) {
-            document.documentElement.classList.remove('dark');
-        } else {
-            document.documentElement.classList.add('dark');
-        }
-    </script>
+    <!-- Theme Initialization & Mode Manager (Prevents FOUC) -->
+    <script src="{% static 'ui/js/theme-manager.js' %}"></script>
 
     <!-- Google Fonts: Inter & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,38 +20,16 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-    <!-- Tailwind CSS with Dark Mode support -->
+    <!-- Tailwind CSS + Centralized Theme Configuration -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
-                        aptos: ['Aptos', 'Aptos Display', 'Segoe UI', 'system-ui', 'sans-serif'],
-                    },
-                    colors: {
-                        zinc: {
-                            850: '#1e1e24',
-                            900: '#18181b',
-                            950: '#09090b',
-                        },
-                        amber: {
-                            450: '#f59e0b',
-                            500: '#f59e0b',
-                            550: '#d97706',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <script src="{% static 'ui/js/tailwind-theme.js' %}"></script>
+
+    <!-- ForensiQ Centralized Design Tokens & Stylesheet -->
+    <link rel="stylesheet" href="{% static 'ui/css/theme.css' %}">
 </head>
 
 <body
-    class="bg-slate-900 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col justify-between transition-colors duration-200 selection:bg-amber-500 selection:text-zinc-950 relative overflow-x-hidden">
+    class="bg-[#f4ecf5] dark:bg-[#140a17] text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col justify-between transition-colors duration-200 selection:bg-amber-500 selection:text-zinc-950 relative overflow-x-hidden">
 
     <!-- Live Wallpaper Video Background (Vivid HUD Elements) -->
     <div class="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
@@ -65,9 +37,9 @@
             autoplay loop muted playsinline>
             <source src="{% static 'core/videos/hud-elements.mp4' %}" type="video/mp4">
         </video>
-        <!-- Balanced Vignette to Keep Center Card Crystal Clear -->
+        <!-- Balanced Vignette to Keep Center Card Crystal Clear with Violet Tint -->
         <div
-            class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(9,9,11,0.5)_0%,_rgba(9,9,11,0.15)_45%,_rgba(9,9,11,0.75)_100%)]">
+            class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(80,45,85,0.45)_0%,_rgba(20,10,23,0.35)_45%,_rgba(20,10,23,0.85)_100%)]">
         </div>
     </div>
 
@@ -94,11 +66,11 @@
 
             <!-- Card Container -->
             <div
-                class="bg-white dark:bg-zinc-900/90 border border-slate-200 dark:border-zinc-800/80 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-black/60 p-7 sm:p-9 backdrop-blur-xl relative">
+                class="bg-white dark:bg-[#1c0e20]/95 border border-[#e4d5e6] dark:border-[#351c3a] rounded-2xl shadow-xl shadow-[#502D55]/5 dark:shadow-black/70 p-7 sm:p-9 backdrop-blur-xl relative">
 
                 <!-- Glowing Border Accent (Dark mode) -->
                 <div
-                    class="absolute -top-px left-1/2 -translate-x-1/2 w-3/4 h-px bg-gradient-to-r from-transparent via-amber-500 to-transparent">
+                    class="absolute -top-px left-1/2 -translate-x-1/2 w-3/4 h-px bg-gradient-to-r from-transparent via-[#8f5796] to-transparent">
                 </div>
 
                 <!-- Header Content -->
@@ -189,40 +161,19 @@
         const toggleBtn = document.getElementById('btn-toggle-password');
         const eyeIcon = document.getElementById('eye-icon');
 
-        toggleBtn.addEventListener('click', function () {
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                eyeIcon.classList.remove('fa-eye');
-                eyeIcon.classList.add('fa-eye-slash');
-            } else {
-                passwordInput.type = 'password';
-                eyeIcon.classList.remove('fa-eye-slash');
-                eyeIcon.classList.add('fa-eye');
-            }
-        });
-
-        // Theme Toggle
-        const themeToggleBtn = document.getElementById('theme-toggle');
-        const darkIcon = document.getElementById('theme-toggle-dark-icon');
-        const lightIcon = document.getElementById('theme-toggle-light-icon');
-
-        function updateIcons() {
-            if (document.documentElement.classList.contains('dark')) {
-                lightIcon.classList.remove('hidden');
-                darkIcon.classList.add('hidden');
-            } else {
-                darkIcon.classList.remove('hidden');
-                lightIcon.classList.add('hidden');
-            }
+        if (toggleBtn && passwordInput && eyeIcon) {
+            toggleBtn.addEventListener('click', function () {
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    eyeIcon.classList.remove('fa-eye');
+                    eyeIcon.classList.add('fa-eye-slash');
+                } else {
+                    passwordInput.type = 'password';
+                    eyeIcon.classList.remove('fa-eye-slash');
+                    eyeIcon.classList.add('fa-eye');
+                }
+            });
         }
-
-        updateIcons();
-
-        themeToggleBtn.addEventListener('click', function () {
-            const isDark = document.documentElement.classList.toggle('dark');
-            localStorage.setItem('color-theme', isDark ? 'dark' : 'light');
-            updateIcons();
-        });
     </script>
 </body>
 

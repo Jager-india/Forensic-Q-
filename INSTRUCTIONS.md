@@ -6,9 +6,11 @@
 
 Key platform capabilities:
 - **Instant Client-Side Interactivity:** Tabulator.js handles sorting, pagination, column reordering, multi-field filtering, and CSV/JSON export on the client side without unnecessary server roundtrips.
-- **Franken UI / Dark Mode Aesthetic:** Deep Zinc-950 dark mode with an interactive Sun/Moon theme switcher and persistent `localStorage` theme state.
-- **Component-Driven HTML-First Architecture:** Clean, modular Django Cotton custom tags (`<c-base>`, `<c-stat_card>`, `<c-filter_bar>`, `<c-data_grid>`, `<c-chart>`).
-- **Production-Ready Python Backend:** Powered by Django's ORM, authentication, routing, and analytical data pipelines.
+- **Centralized Violet Design System:** Curated `#502D55` dark-violet theme and `#f4ecf5` soft light-violet theme with Aptos typography, synchronous FOUC prevention, and synchronized dark/light toggle.
+- **Component-Driven HTML-First Architecture:** Clean, modular Django Cotton custom tags (`<c-base>`, `<c-page_header>`, `<c-stat_card>`, `<c-card>`, `<c-filter_bar>`, `<c-data_grid>`, `<c-chart>`, `<c-modal>`, `<c-module_card>`, `<c-file_uploader>`).
+- **Standardized Navigation & Clean Header Titles:** Unified `← Back` navigation via `<c-page_header back_url="..." />` across all views with short, clean module headers (`Q-Bank`, `Q-Mail`, `Q-Scan`, `Q-Verify`, `Q-Chat`).
+- **Monochrome In-Development Cards:** In-development engines (`BUILDING`) render in clean, neutral monochrome black-and-white styling on the landing page.
+- **Production-Ready Python Backend:** Powered by Django's ORM, services/selectors separation, atomic transactions, and analytical data pipelines.
 
 ---
 
@@ -22,10 +24,19 @@ Forensic-Q/
 │   ├── asgi.py / wsgi.py
 ├── apps/                      # Modular Forensic Analytical Engines
 │   ├── q_bank/                # Financial & bank statement ledger analysis
-│   ├── q_chat/                # Communication log & chat forensics
-│   └── q_link/                # Entity link & network graph analysis
+│   ├── q_chat/                # Corporate messaging & chat thread forensics
+│   ├── q_ledger/              # ERP & financial records auditor (BUILDING)
+│   ├── q_link/                # Cross-source evidence correlator (BUILDING)
+│   ├── q_mail/                # Email & PST mailbox forensic extraction
+│   ├── q_scan/                # Endpoint filesystem & keyword forensic triage
+│   ├── q_trail/               # End-to-end money trail mapper (BUILDING)
+│   ├── q_verify/              # Document metadata & authenticity verification
+│   └── q_voice/               # Voice transcript intelligence analyzer (BUILDING)
 ├── core/                      # Core base models (ForensicBaseModel, TimeStampedModel) & utilities
 │   ├── models.py
+│   ├── middleware.py          # Master portal authentication middleware
+│   ├── modules.py             # Dynamic module discovery catalog
+│   ├── views.py               # Landing page, login & logout handlers
 │   └── apps.py
 ├── demo/                      # Component sandbox & Tabulator demo
 │   ├── views.py
@@ -34,20 +45,26 @@ Forensic-Q/
 │   └── templates/demo/        # Demo dashboard templates
 │       ├── tabulator_demo.html# Forensic transaction ledger demo
 │       └── test_dashboard.html# Component test sandbox
-├── ui/                        # Centralized UI Design System
+├── ui/                        # Centralized UI Design System & Cotton Components
+│   ├── static/ui/             # Centralized design tokens & scripts
+│   │   ├── css/theme.css      # Core tokens, Tabulator dark styling & scrollbars
+│   │   └── js/
+│   │       ├── tailwind-theme.js  # Tailwind CDN theme config & violet palette
+│   │       └── theme-manager.js   # Synchronous theme init & dark/light switcher
 │   ├── STYLE_GUIDE.md         # UI Style Guide & Cotton Component Catalog
 │   ├── apps.py
 │   └── templates/cotton/      # ALL REUSABLE COTTON COMPONENTS
 │       ├── base.html          # Root shell, dark theme & theme switcher
-│       ├── page_header.html   # Breadcrumb, title, and action toolbar
-│       ├── stat_card.html     # KPI metric widgets (sky, emerald, amber, rose)
+│       ├── page_header.html   # Clean title, standardized back_url button & slot
+│       ├── file_uploader.html # Standardized drag-and-drop file upload component
+│       ├── stat_card.html     # KPI metric widgets (sky, emerald, amber, rose, slate)
 │       ├── card.html          # Standard card containers
 │       ├── filter_bar.html    # Multi-column instant filter toolbar
 │       ├── badge.html         # Status & risk badges
 │       ├── modal.html         # Forensic detail dossiers
 │       ├── data_grid.html     # Tabulator.js data tables
 │       ├── chart.html         # Plotly visualization containers
-│       └── module_card.html   # 6-engine forensic module card component
+│       └── module_card.html   # Module card with live accents & monochrome BUILDING state
 ├── manage.py
 ├── pyproject.toml             # uv package dependencies
 └── INSTRUCTIONS.md            # Developer instructions (this file)
@@ -62,7 +79,7 @@ Forensic-Q/
 * **Component Engine:** [`django-cotton`](https://django-cotton.com/) (`>=2.7.2`)
 * **Interactive Data Grid:** [Tabulator.js](https://tabulator.info/) `v6.3.0`
 * **Visualization:** `plotly` (`>=7.1.0`) + Plotly.js (`plotly_dark` theme)
-* **Design & Styling:** Tailwind CSS (`dark:` mode class), FontAwesome 6, Google Fonts (Inter, JetBrains Mono)
+* **Design & Styling:** Tailwind CSS (`dark:` mode class), FontAwesome 6, Aptos font, JetBrains Mono
 
 ---
 
@@ -76,16 +93,23 @@ uv run python manage.py migrate
 # Check for system configuration issues
 uv run python manage.py check
 
+# Run pre-commit quality & architecture validation
+uv run python scripts/validate_project.py
+
 # Run local development server
 uv run python manage.py runserver 127.0.0.1:8000
 ```
 
 ### Endpoints & Access
-* **Portal Login:** [http://127.0.0.1:8000/login/](http://127.0.0.1:8000/login/) *(Configured via `PORTAL_ACCESS_PASSWORD` in `.env`)*
+* **Landing Platform:** [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
+* **Portal Login:** [http://127.0.0.1:8000/login/](http://127.0.0.1:8000/login/) *(Password: `forensiq2026`)*
+* **Q-Bank Multi-Bank Analyzer:** [http://127.0.0.1:8000/bank/](http://127.0.0.1:8000/bank/)
 * **Q-Mail Investigation Hub:** [http://127.0.0.1:8000/mail/](http://127.0.0.1:8000/mail/)
+* **Q-Chat Corporate Messaging:** [http://127.0.0.1:8000/chat/](http://127.0.0.1:8000/chat/)
+* **Q-Verify Authenticity Verifier:** [http://127.0.0.1:8000/verify/](http://127.0.0.1:8000/verify/)
+* **Q-Scan Endpoint Scanner:** [http://127.0.0.1:8000/scan/](http://127.0.0.1:8000/scan/)
 * **Demo Forensic Ledger:** [http://127.0.0.1:8000/demo/tabulator/](http://127.0.0.1:8000/demo/tabulator/)
 * **Demo Component Sandbox:** [http://127.0.0.1:8000/demo/sandbox/](http://127.0.0.1:8000/demo/sandbox/)
-* **Django Admin:** [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 
 ---
 
@@ -94,12 +118,18 @@ uv run python manage.py runserver 127.0.0.1:8000
 Building a new dashboard page is simple and clean:
 
 ```html
-<c-base title="Forensic Report">
+<c-base title="ForensiQ | Entity Flow Ledger">
 
-    <!-- 1. Page Header with Action Buttons -->
-    <c-page_header title="Entity Flow Ledger" subtitle="Interactive audit" icon="fa-solid fa-network-wired">
-        <button id="btn-export" class="px-3 py-1.5 bg-amber-500 text-zinc-950 font-bold rounded-lg text-xs">
-            Export CSV
+    <!-- 1. Standardized Page Header with Back Button -->
+    <c-page_header 
+        title="Entity Flow Ledger" 
+        subtitle="Interactive audit of cross-source fund routing." 
+        icon="fa-solid fa-network-wired"
+        icon_color="text-amber-500"
+        back_url="/">
+        
+        <button id="btn-export" class="px-3.5 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs shadow-md">
+            <i class="fa-solid fa-file-csv mr-1.5"></i> Export CSV
         </button>
     </c-page_header>
 
@@ -110,7 +140,18 @@ Building a new dashboard page is simple and clean:
         <c-stat_card title="Entities" value="84" variant="sky" icon="fa-solid fa-users" />
     </div>
 
-    <!-- 3. Visuals & Data Table -->
+    <!-- 3. Standardized File Uploader -->
+    <div class="mb-6">
+        <c-file_uploader 
+            name="evidence_file"
+            accept=".csv,.xlsx,.json"
+            label="Forensic Ledger Evidence File"
+            hint="Drag & drop evidence dataset or click to browse"
+            badge="SHA-256 Validated"
+            required />
+    </div>
+
+    <!-- 4. Visuals & Data Table -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-chart title="Outflow Distribution" :figure_html="chart_html" />
         <c-data_grid id="entity-grid" title="Entity Registry" :columns="columns_json" :data="data_json" />
@@ -124,9 +165,11 @@ Building a new dashboard page is simple and clean:
 ## 6. Critical Template & Cotton Rules
 
 1. **Root Layout Component:** Use `<c-base title="...">` to wrap all dashboard pages.
-2. **Dynamic Props Binding:** Always use `:prop="variable"` for dynamic Django variables (e.g. `:figure_html="chart_html"` or `:data="table_data"`).
-3. **Named Slots Syntax:** Always use `<c-slot name="...">` (e.g. `<c-slot name="actions">`).
-4. **No `<c-` tags in HTML Comments:** Use `{% comment %}...{% endcomment %}` to avoid unclosed tag parse errors.
+2. **Standardized Header Navigation:** Always use `<c-page_header title="Q-Name" back_url="..." />` to render clean titles and the standardized `← Back` button.
+3. **Centralized File Ingestion:** Always use `<c-file_uploader />` for file inputs instead of writing custom dropzone markup.
+4. **Dynamic Props Binding:** Always use `:prop="variable"` for dynamic Django variables (e.g. `:figure_html="chart_html"` or `:data="table_data"`).
+5. **Named Slots Syntax:** Always use `<c-slot name="...">` (e.g. `<c-slot name="actions">`). Never use `<c-slot:name>` (Windows compatibility).
+6. **No `<c-` tags in HTML Comments:** Use `{% comment %}...{% endcomment %}` to avoid unclosed tag parse errors.
 
 ---
 
@@ -148,16 +191,12 @@ class QBankConfig(AppConfig):
     module_num = "01"
     module_category = "TRANSACTION"
     module_name = "Bank"
-    module_tag = "LIVE"
-    module_accent = "orange"  # orange, gold, purple, teal, rose, amber
-    module_tagline = "Reads statements. Flags keywords."
-    module_features = [
-        "Flagged transactions, vendor & party summary",
-        "Tuneable watchlist per investigation",
-    ]
-    module_url = "/demo/tabulator/"
+    module_tag = "LIVE"  # 'LIVE' for active engines, 'BUILDING' for in-development engines
+    module_accent = "orange"  # orange, gold, purple, teal, rose, amber, steel, copper
+    module_tagline = "Multi-Bank Forensic Analyzer"
+    module_url = "/bank/"
     module_order = 1
 ```
 
+*Monochrome Rule:* Cards with `module_tag = "BUILDING"` automatically render in clean black-and-white monochrome styling on the landing page.
 *Grid Layout Rule:* If the total number of apps is not a multiple of 3, the final row automatically centers cards across the workstation grid.
-

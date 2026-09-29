@@ -1,0 +1,308 @@
+/**
+ * ForensiQ Centralized Design Tokens & Theme Stylesheet
+ * Primary Brand Base: Violet (#502D55)
+ */
+
+:root {
+    /* Color Tokens - Light Mode (Light Violet Aesthetic) */
+    --fq-bg-app: #f4ecf5;
+    --fq-bg-surface: #ffffff;
+    --fq-bg-surface-elevated: #faf5fb;
+    --fq-bg-subtle: #efe4f1;
+    --fq-border-subtle: #e4d5e6;
+    --fq-border-strong: #cdb3d0;
+    
+    --fq-text-main: #2b122f;
+    --fq-text-muted: #6e5472;
+    --fq-text-subtle: #98809c;
+
+    --fq-brand-violet: #502D55;
+    --fq-brand-violet-hover: #3d2241;
+    --fq-brand-violet-light: #ece0ef;
+
+    --fq-accent-amber: #f59e0b;
+}
+
+.dark {
+    /* Color Tokens - Dark Mode */
+    --fq-bg-app: #140a17;
+    --fq-bg-surface: #201024;
+    --fq-bg-surface-elevated: #28152e;
+    --fq-bg-subtle: #190d1d;
+    --fq-border-subtle: #351c3a;
+    --fq-border-strong: #502D55;
+
+    --fq-text-main: #f4f4f5;
+    --fq-text-muted: #d7c4d9;
+    --fq-text-subtle: #8a738c;
+
+    --fq-brand-violet: #502D55;
+    --fq-brand-violet-hover: #6c3d73;
+    --fq-brand-violet-light: #351c3a;
+
+    --fq-accent-amber: #f59e0b;
+}
+
+/* Global Utility & Reset Rules */
+[x-cloak] {
+    display: none !important;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+input[type="checkbox"] {
+    accent-color: var(--fq-accent-amber);
+    cursor: pointer;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--fq-border-subtle);
+    border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--fq-border-strong);
+}
+
+/* ============================================================
+   Franken UI / shadcn Styled Tabulator Themes (Light & Dark)
+   ============================================================ */
+
+/* Light Mode Tabulator */
+.tabulator {
+    border: 1px solid var(--fq-border-subtle);
+    background-color: var(--fq-bg-surface);
+    border-radius: 0.75rem;
+    font-size: 0.8125rem;
+    overflow: hidden;
+}
+
+.tabulator .tabulator-header {
+    background-color: var(--fq-bg-app);
+    border-bottom: 1px solid var(--fq-border-subtle);
+    color: var(--fq-text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.6875rem;
+    letter-spacing: 0.05em;
+}
+
+.tabulator .tabulator-header .tabulator-col {
+    background-color: var(--fq-bg-app);
+    border-right: 1px solid var(--fq-bg-subtle);
+    padding: 8px 12px;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content {
+    padding: 2px 0;
+}
+
+.tabulator .tabulator-row {
+    border-bottom: 1px solid var(--fq-bg-subtle);
+    transition: background-color 0.15s ease;
+    background-color: var(--fq-bg-surface);
+    color: var(--fq-text-main);
+    cursor: pointer;
+}
+
+.tabulator .tabulator-row:hover {
+    background-color: var(--fq-bg-app) !important;
+}
+
+.tabulator .tabulator-row.tabulator-selected {
+    background-color: var(--fq-brand-violet-light) !important;
+    color: var(--fq-brand-violet);
+}
+
+.tabulator .tabulator-cell {
+    padding: 9px 12px;
+    border-right: 1px solid var(--fq-bg-app);
+    display: inline-flex;
+    align-items: center;
+}
+
+.tabulator .tabulator-footer {
+    background-color: var(--fq-bg-app);
+    border-top: 1px solid var(--fq-border-subtle);
+    padding: 8px 16px;
+    color: var(--fq-text-muted);
+}
+
+.tabulator-page {
+    border-radius: 0.375rem !important;
+    border: 1px solid var(--fq-border-strong) !important;
+    padding: 3px 9px !important;
+    margin: 0 2px !important;
+    background: var(--fq-bg-surface) !important;
+    color: #334155 !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+}
+
+.tabulator-page.active {
+    background-color: var(--fq-brand-violet) !important;
+    color: #ffffff !important;
+    border-color: var(--fq-brand-violet) !important;
+    font-weight: 700 !important;
+}
+
+/* Tabulator Summary / Calculation Rows (Light) */
+.tabulator .tabulator-calcs-holder {
+    background-color: var(--fq-bg-app) !important;
+    border-top: 2px solid var(--fq-border-subtle) !important;
+    border-bottom: 1px solid var(--fq-border-subtle) !important;
+}
+
+.tabulator .tabulator-calcs-holder .tabulator-row {
+    background-color: var(--fq-bg-app) !important;
+    color: #1e293b !important;
+    font-weight: 600 !important;
+}
+
+.tabulator .tabulator-calcs-holder .tabulator-cell {
+    background-color: transparent !important;
+    color: inherit !important;
+}
+
+/* ============================================================
+   Dark Mode Tabulator (Franken/shadcn Dark Violet Aesthetic)
+   ============================================================ */
+
+.dark .tabulator {
+    border: 1px solid var(--fq-border-subtle);
+    background-color: var(--fq-bg-app);
+    border-radius: 0.75rem;
+    color: var(--fq-text-main);
+}
+
+.dark .tabulator .tabulator-tableholder,
+.dark .tabulator .tabulator-table {
+    background-color: var(--fq-bg-app) !important;
+}
+
+.dark .tabulator .tabulator-header {
+    background-color: var(--fq-bg-surface);
+    border-bottom: 1px solid var(--fq-border-subtle);
+    color: var(--fq-text-muted);
+}
+
+.dark .tabulator .tabulator-header .tabulator-col {
+    background-color: var(--fq-bg-surface);
+    border-right: 1px solid var(--fq-border-subtle);
+}
+
+.dark .tabulator .tabulator-header .tabulator-col:hover {
+    background-color: var(--fq-bg-surface-elevated);
+}
+
+.dark .tabulator .tabulator-row {
+    background-color: var(--fq-bg-app);
+    border-bottom: 1px solid var(--fq-bg-surface);
+    color: var(--fq-text-main);
+    cursor: pointer;
+}
+
+.dark .tabulator .tabulator-row.tabulator-row-even {
+    background-color: var(--fq-bg-subtle);
+}
+
+.dark .tabulator .tabulator-row:hover {
+    background-color: var(--fq-bg-surface-elevated) !important;
+}
+
+.dark .tabulator .tabulator-row.tabulator-selected {
+    background-color: var(--fq-border-subtle) !important;
+    color: var(--fq-accent-amber) !important;
+}
+
+.dark .tabulator .tabulator-cell {
+    border-right: 1px solid var(--fq-bg-surface);
+}
+
+/* Tabulator Summary / Calculation Rows (Dark) */
+.dark .tabulator .tabulator-calcs-holder,
+.dark .tabulator .tabulator-calcs-holder .tabulator-row,
+.dark .tabulator .tabulator-calcs-holder .tabulator-row.tabulator-calcs,
+.dark .tabulator-calcs,
+.dark .tabulator-calcs-top,
+.dark .tabulator-calcs-bottom,
+.dark .tabulator-row.tabulator-calcs {
+    background-color: var(--fq-bg-surface) !important;
+    border-top: 1px solid var(--fq-border-subtle) !important;
+    border-bottom: 1px solid var(--fq-border-subtle) !important;
+    color: var(--fq-text-main) !important;
+}
+
+.dark .tabulator .tabulator-calcs-holder .tabulator-cell,
+.dark .tabulator-calcs .tabulator-cell,
+.dark .tabulator-row.tabulator-calcs .tabulator-cell {
+    background-color: transparent !important;
+    color: inherit !important;
+    border-right: 1px solid var(--fq-border-subtle) !important;
+}
+
+.dark .tabulator .tabulator-footer {
+    background-color: var(--fq-bg-surface);
+    border-top: 1px solid var(--fq-border-subtle);
+    color: var(--fq-text-muted);
+}
+
+.dark .tabulator-page {
+    background-color: var(--fq-bg-surface-elevated) !important;
+    border-color: var(--fq-border-subtle) !important;
+    color: var(--fq-text-main) !important;
+}
+
+.dark .tabulator-page.active {
+    background-color: var(--fq-accent-amber) !important;
+    color: var(--fq-bg-app) !important;
+    border-color: var(--fq-accent-amber) !important;
+}
+
+.dark .tabulator-page:hover:not(.active):not([disabled]) {
+    background-color: var(--fq-border-subtle) !important;
+}
+
+.dark .tabulator-paginator button {
+    background-color: var(--fq-bg-surface-elevated) !important;
+    color: #d4d4d8 !important;
+    border: 1px solid var(--fq-border-subtle) !important;
+    border-radius: 0.375rem !important;
+    padding: 2px 8px !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    margin: 0 1px !important;
+}
+
+.dark .tabulator-paginator button:hover:not(:disabled) {
+    background-color: var(--fq-border-subtle) !important;
+    color: #ffffff !important;
+}
+
+.dark .tabulator-paginator button:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+}
+
+.dark .tabulator-page-size {
+    background-color: var(--fq-bg-surface);
+    color: var(--fq-text-main);
+    border: 1px solid var(--fq-border-subtle);
+    border-radius: 0.375rem;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    margin-left: 4px;
+}

@@ -91,43 +91,65 @@ class ComponentAuditTelemetry(ForensicBaseModel):
 ## 3. Cotton Component Props & Slot Reference
 
 ### 1. `<c-base>`
-Root layout shell for all pages.
+Root layout shell for all pages with theme switcher and FOUC prevention.
 * **Props:** `title` (string, page title)
 * **Slots:** `{{ slot }}` (main body content)
 
 ### 2. `<c-page_header>`
-Top page header with breadcrumb and actions.
-* **Props:** `title`, `subtitle`, `icon`, `icon_color`, `category`, `section`
-* **Slots:** `{{ slot }}` (action buttons)
+Top page header with standardized back navigation and action toolbar.
+* **Props:**
+  * `title` (string, required): Clean module/page title (e.g. `"Q-Bank"`, `"Q-Mail"`, `"Q-Scan"`, `"Q-Verify"`, `"Q-Chat"`).
+  * `subtitle` (string, optional): Contextual description or audit status.
+  * `icon` (string, optional): FontAwesome icon class (e.g. `"fa-solid fa-building-columns"`).
+  * `icon_color` (string, optional): Icon color class (default: `"text-amber-500"`).
+  * `back_url` (string, optional): URL for the standardized `← Back` button (e.g. `"/"`). If provided, renders an elegant back button.
+* **Slots:** `{{ slot }}` (action buttons toolbar)
 
-### 3. `<c-stat_card>`
+### 3. `<c-file_uploader>`
+Standardized centralized drag-and-drop file upload component with visual hash validation badge.
+* **Props:**
+  * `name` (string, optional, default: `"file"`): HTML input name attribute.
+  * `accept` (string, optional, default: `"*"`): Comma-separated accepted file extensions / MIME types (e.g. `".csv,.xlsx,.json,.pst"`).
+  * `label` (string, optional, default: `"Forensic File Ingestion"`): Primary upload zone heading.
+  * `hint` (string, optional, default: `"Drag & drop file here, or click to browse"`): Subtitle / instructional text.
+  * `badge` (string, optional, default: `"SHA-256 Hash Verified"`): Security / validation badge text.
+  * `required` (boolean, optional, default: `false`): Sets HTML `required` on input.
+  * `multiple` (boolean, optional, default: `false`): Enables multi-file selection.
+  * `id` (string, optional, default: `"file-upload"`): Input ID for custom JS event binding.
+  * `icon` (string, optional, default: `"fa-solid fa-cloud-arrow-up"`): FontAwesome icon class.
+
+### 4. `<c-stat_card>`
 KPI metric summary card.
 * **Props:** `title`, `value`, `subtitle`, `extra`, `icon`, `variant` (`"emerald"`, `"rose"`, `"amber"`, `"sky"`, `"slate"`)
 
-### 4. `<c-card>`
+### 5. `<c-card>`
 Standard container with header.
 * **Props:** `title`, `subtitle`, `icon`, `icon_color`
 * **Slots:** `actions` (`<c-slot name="actions">`), `{{ slot }}` (body), `footer` (`<c-slot name="footer">`)
 
-### 5. `<c-filter_bar>`
+### 6. `<c-filter_bar>`
 Multi-column filter toolbar.
 * **Props:** `cols` (`"3"`, `"4"`, `"5"`, etc.)
 * **Slots:** `{{ slot }}` (filter inputs), `summary` (`<c-slot name="summary">`), `actions` (`<c-slot name="actions">`)
 
-### 6. `<c-data_grid>`
+### 7. `<c-data_grid>`
 Tabulator.js table container.
 * **Props:** `id`, `title`, `subtitle`, `icon`, `:columns` (JSON string), `:data` (JSON string), `pagination_size`
 
-### 7. `<c-chart>`
+### 8. `<c-chart>`
 Plotly visualization container.
 * **Props:** `title`, `subtitle`, `icon`, `:figure_html` (rendered Plotly HTML string)
 
-### 8. `<c-modal>`
+### 9. `<c-modal>`
 Backdrop-blurred detail modal.
 * **Props:** `id`, `title`, `subtitle`, `icon`
 * **Slots:** `{{ slot }}` (modal body), `footer` (`<c-slot name="footer">`)
 
-### 9. `<c-module_card>`
-Forensic engine landing card.
+### 10. `<c-badge>`
+Status and risk indicator badge.
+* **Props:** `text` (string), `variant` (`"emerald"`, `"rose"`, `"sky"`, `"amber"`, `"slate"`), `icon` (string)
+
+### 11. `<c-module_card>`
+Forensic engine landing card with live accent badges and monochrome `BUILDING` styling.
 * **Props:** `num`, `category`, `name`, `tag` (`"LIVE"`, `"BUILDING"`), `accent` (`"orange"`, `"gold"`, `"purple"`, `"teal"`, `"rose"`, `"amber"`, `"steel"`, `"copper"`), `href`, `tagline`
 * **Slots:** `{{ slot }}` (feature list items)

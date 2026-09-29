@@ -1,0 +1,119 @@
+{% comment %}
+ForensiQ Centralized File Uploader Component
+Props:
+  - id: string (unique input/container ID, default: 'fq-file-uploader')
+  - name: string (form field name, default: 'file')
+  - accept: string (comma-separated accepted extensions, e.g. '.xlsx,.csv,.pdf')
+  - label: string (optional label above uploader)
+  - hint: string (helper text below upload icon)
+  - badge: string (badge text, e.g. 'SHA-256 Hashing', 'Max 5GB')
+  - icon: string (FontAwesome icon, default: 'fa-solid fa-cloud-arrow-up')
+  - required: boolean (default: false)
+  - multiple: boolean (default: false)
+  - class: string (extra container CSS classes)
+{% endcomment %}
+{% with uid=id|default:"fq-file-input" fname=name|default:"file" acc=accept|default:"*/*" uicon=icon|default:"fa-solid fa-cloud-arrow-up" %}
+<div class="w-full space-y-1.5 {{ class }}" x-data="{
+    isDragging: false,
+    fileName: '',
+    fileSize: '',
+    fileCount: 0,
+    handleFiles(files) {
+        if (files && files.length > 0) {
+            this.fileCount = files.length;
+            if (files.length === 1) {
+                this.fileName = files[0].name;
+                const bytes = files[0].size;
+                if (bytes < 1024) this.fileSize = bytes + ' B';
+                else if (bytes < 1048576) this.fileSize = (bytes / 1024).toFixed(1) + ' KB';
+                else if (bytes < 1073741824) this.fileSize = (bytes / 1048576).toFixed(2) + ' MB';
+                else this.fileSize = (bytes / 1073741824).toFixed(2) + ' GB';
+            } else {
+                this.fileName = files.length + ' files selected';
+                let total = 0;
+                for (let i = 0; i < files.length; i++) total += files[i].size;
+                this.fileSize = (total / 1048576).toFixed(2) + ' MB total';
+            }
+        } else {
+            this.clear();
+        }
+    },
+    clear() {
+        this.fileName = '';
+        this.fileSize = '';
+        this.fileCount = 0;
+        const input = document.getElementById('{{ uid }}');
+        if (input) input.value = '';
+    }
+}">
+    {% if label %}
+    <div class="flex items-center justify-between mb-1">
+        <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300">
+            {{ label }}{% if required %} <span class="text-rose-500">*</span>{% endif %}
+        </label>
+        {% if badge %}
+        <span class="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950/80 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800/40">
+            <i class="fa-solid fa-fingerprint text-[9px]"></i>
+            {{ badge }}
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Drag & Drop Zone Area -->
+    <div class="relative group rounded-2xl border-2 border-dashed transition-all duration-200 p-5 text-center cursor-pointer overflow-hidden"
+         :class="isDragging ? 'border-[#8f5796] bg-violet-50/50 dark:bg-[#28152e]/60' : (fileName ? 'border-emerald-500/70 bg-emerald-50/30 dark:bg-emerald-950/20' : 'border-slate-300 dark:border-[#351c3a] bg-slate-50/60 dark:bg-[#190d1d]/60 hover:border-[#8f5796] hover:bg-violet-50/20 dark:hover:bg-[#201024]')"
+         @dragover.prevent="isDragging = true"
+         @dragleave.prevent="isDragging = false"
+         @drop.prevent="isDragging = false; $refs.fileInput.files = $event.dataTransfer.files; handleFiles($event.dataTransfer.files)">
+
+        <input type="file"
+               id="{{ uid }}"
+               name="{{ fname }}"
+               accept="{{ acc }}"
+               x-ref="fileInput"
+               {% if required %}required{% endif %}
+               {% if multiple %}multiple{% endif %}
+               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+               @change="handleFiles($event.target.files)">
+
+        <!-- Empty / Default Dropzone State -->
+        <template x-if="!fileName">
+            <div class="flex flex-col items-center justify-center space-y-2 pointer-events-none">
+                <div class="w-11 h-11 rounded-xl bg-white dark:bg-[#28152e] border border-slate-200 dark:border-[#351c3a] flex items-center justify-center text-[#8f5796] dark:text-[#ba88bf] shadow-sm group-hover:scale-105 transition transform">
+                    <i class="{{ uicon }} text-lg"></i>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                        {{ hint|default:"Click to browse or drag & drop evidence file" }}
+                    </p>
+                    <p class="text-[11px] text-slate-400 dark:text-zinc-500 mt-0.5 font-mono">
+                        Accepted: <span class="text-slate-600 dark:text-zinc-400 font-semibold">{{ acc }}</span>
+                    </p>
+                </div>
+            </div>
+        </template>
+
+        <!-- File Selected Preview State -->
+        <template x-if="fileName">
+            <div class="flex items-center justify-between bg-white dark:bg-[#201024] border border-emerald-500/30 dark:border-emerald-500/40 rounded-xl p-3 text-left relative z-20 shadow-sm">
+                <div class="flex items-center space-x-3 min-w-0 flex-1 mr-2">
+                    <div class="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                        <i class="fa-solid fa-file-circle-check text-sm"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs font-bold text-slate-900 dark:text-white truncate" x-text="fileName"></p>
+                        <p class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold" x-text="fileSize"></p>
+                    </div>
+                </div>
+                <button type="button"
+                        @click.stop="clear()"
+                        title="Remove file"
+                        class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-zinc-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-950/60 dark:hover:text-rose-400 text-slate-400 transition flex items-center justify-center cursor-pointer flex-shrink-0">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+        </template>
+    </div>
+</div>
+{% endwith %}

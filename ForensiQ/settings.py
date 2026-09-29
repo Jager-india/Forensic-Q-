@@ -171,6 +171,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = "static/"
+STATICFILES_DIRS = [
+    BASE_DIR / "ui" / "static",
+]
 
 # Media Files (PST Evidence & Extracted Attachments)
 MEDIA_URL = "media/"

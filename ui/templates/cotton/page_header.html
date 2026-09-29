@@ -1,34 +1,44 @@
-<div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-    <div>
-        {% if category %}
-        <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-1">
-            <span>ForensiQ</span>
-            <i class="fa-solid fa-chevron-right text-[10px]"></i>
-            <span class="text-sky-600 dark:text-sky-400">{{ category }}</span>
-            {% if section %}
-            <i class="fa-solid fa-chevron-right text-[10px]"></i>
-            <span class="text-slate-700 dark:text-zinc-300">{{ section }}</span>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-            {% if icon %}
-            <i class="{{ icon }} {{ icon_color|default:'text-amber-500' }}"></i>
-            {% endif %}
-            <span>{{ title }}</span>
-        </h1>
-
-        {% if subtitle %}
-        <p class="text-slate-500 dark:text-zinc-400 text-sm mt-1 leading-relaxed">
-            {{ subtitle }}
-        </p>
-        {% endif %}
-    </div>
-
-    {% if slot %}
-    <div class="flex items-center gap-2 flex-wrap">
-        {{ slot }}
+{% comment %}
+ForensiQ Page Header Component
+Props:
+  - title: string (Primary page title, e.g. "Q-Mail")
+  - subtitle: string (Optional descriptive subtext)
+  - icon: string (FontAwesome icon class)
+  - icon_color: string (Icon color class, default: "text-amber-500")
+  - back_url: string (Optional URL for the standardized Back button)
+  - slot: slot for right-hand action buttons
+{% endcomment %}
+<div class="mb-6">
+    {% if back_url %}
+    <div class="mb-3">
+        <a href="{{ back_url }}" 
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-[#201024] hover:bg-slate-100 dark:hover:bg-[#2c1830] text-slate-700 dark:text-zinc-300 border border-[#e4d5e6] dark:border-[#351c3a] shadow-sm transition group">
+            <i class="fa-solid fa-arrow-left text-[10px] group-hover:-translate-x-0.5 transition-transform"></i>
+            <span>Back</span>
+        </a>
     </div>
     {% endif %}
+
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 select-none">
+                {% if icon %}
+                <i class="{{ icon }} {{ icon_color|default:'text-amber-500' }}"></i>
+                {% endif %}
+                <span>{{ title }}</span>
+            </h1>
+
+            {% if subtitle %}
+            <p class="text-slate-500 dark:text-zinc-400 text-sm mt-1 leading-relaxed">
+                {{ subtitle }}
+            </p>
+            {% endif %}
+        </div>
+
+        {% if slot %}
+        <div class="flex items-center gap-2 flex-wrap">
+            {{ slot }}
+        </div>
+        {% endif %}
+    </div>
 </div>

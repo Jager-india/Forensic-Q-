@@ -2,12 +2,11 @@
 
     <!-- Page Header -->
     <c-page_header 
-        title="Q-Bank • Financial & Bank Statement Forensic Engine" 
+        title="Q-Bank" 
         subtitle="Multi-bank statement forensic analysis organized by target person / auditee, with automated CDM triage and fuzzy screening." 
         icon="fa-solid fa-building-columns"
         icon_color="text-emerald-400"
-        category="Financial Forensics" 
-        section="Auditees & Statement Directory">
+        back_url="/">
         
         <div class="flex items-center gap-2">
             <button onclick="openNewPersonModal()" 
@@ -216,11 +215,13 @@
                     </div>
                 </div>
 
-                <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Statement File</label>
-                    <input type="file" name="statement_file" accept=".xlsx,.xls,.csv,.docx,.pdf" required
-                           class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer">
-                </div>
+                <c-file_uploader 
+                    name="statement_file"
+                    accept=".xlsx,.xls,.csv,.docx,.pdf"
+                    label="Bank Statement Document"
+                    hint="Drag & drop statement (Excel, CSV, PDF, Word) or click to browse"
+                    badge="Auto-Parsed & Hashed"
+                    required />
 
                 <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-zinc-800">
                     <button type="button" onclick="closeUploadModal()" class="px-4 py-2 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 cursor-pointer">

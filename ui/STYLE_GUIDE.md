@@ -5,26 +5,26 @@ This document establishes the official design system, color tokens, dark mode im
 
 ---
 
-## 1. Aesthetic Vision: Franken UI / Dark Theme Aesthetic
+## 1. Aesthetic Vision: Centralized Violet Dark Theme & Aptos Typography
 
-ForensiQ implements a **modern dark design system** tailored for high-density forensic analytics:
-* **Canvas:** Deep Zinc-950 (`#09090b` / `dark:bg-zinc-950`)
-* **Surfaces & Cards:** Zinc-900 (`#18181b` / `dark:bg-zinc-900`) with crisp `border-zinc-800` (`#27272a`) borders.
-* **Header Bar:** Translucent `bg-zinc-950/80` with backdrop blur (`backdrop-blur-md`).
+ForensiQ implements a **modern dark-violet design system** tailored for high-density forensic analytics:
+* **Canvas Background:** Curated Deep Violet (`#502D55` / `dark:bg-[#502D55]`).
+* **Surfaces & Cards:** Dark Violet-Zinc (`#3d2042` / `dark:bg-[#3d2042]` / `dark:bg-zinc-900`) with crisp `dark:border-[#6b3d72]` borders.
+* **Header Bar:** Translucent `bg-[#502D55]/80` with backdrop blur (`backdrop-blur-md`).
 * **Accents & Highlights:** Warm Amber (`#f59e0b` / `amber-500`) as the primary brand accent, with Sky-400 for info, Emerald-400 for credits/low risk, and Rose-500 for alerts/outflows.
-* **Theme Switching:** Instant dark/light mode toggle with zero page flicker (FOUC-prevented inline script) and `localStorage` persistence.
+* **Theme Switching:** Instant dark/light mode toggle with zero page flicker (FOUC-prevented inline script in `theme-manager.js`) and `localStorage` persistence.
 
 ---
 
 ## 2. Color Palette & Dark Mode Tokens
 
-| Surface / Element | Light Mode Class | Dark Mode Class | Hex Code |
+| Surface / Element | Light Mode Class | Dark Mode Class | Hex Code (Light / Dark) |
 | :--- | :--- | :--- | :--- |
-| **Canvas Background** | `bg-slate-50` | `dark:bg-zinc-950` | `#09090b` |
-| **Card Surface** | `bg-white` | `dark:bg-zinc-900` | `#18181b` |
-| **Borders & Dividers** | `border-slate-200` | `dark:border-zinc-800` | `#27272a` |
-| **Primary Text** | `text-slate-900` | `dark:text-zinc-100` / `text-white` | `#f4f4f5` / `#ffffff` |
-| **Muted / Subtitle Text** | `text-slate-500` | `dark:text-zinc-400` | `#a1a1aa` |
+| **Canvas Background** | `bg-[#f4ecf5]` | `dark:bg-[#140a17]` | `#f4ecf5` / `#140a17` |
+| **Card Surface** | `bg-white` | `dark:bg-[#201024]` / `dark:bg-zinc-900` | `#ffffff` / `#201024` |
+| **Borders & Dividers** | `border-[#e4d5e6]` | `dark:border-[#351c3a]` / `dark:border-zinc-800`| `#e4d5e6` / `#351c3a` |
+| **Primary Text** | `text-[#2b122f]` / `text-slate-900` | `dark:text-zinc-100` / `text-white` | `#2b122f` / `#f4f4f5` |
+| **Muted / Subtitle Text** | `text-[#6e5472]` / `text-slate-500` | `dark:text-zinc-400` | `#6e5472` / `#a1a1aa` |
 | **Brand Accent (Amber)** | `bg-amber-500` | `bg-amber-500` / `text-amber-400` | `#f59e0b` |
 | **Positive / Credit (Emerald)**| `bg-emerald-50` | `dark:bg-emerald-950/50` | `#10b981` |
 | **Alert / Flag (Rose)** | `bg-rose-50` | `dark:bg-rose-950/50` | `#f43f5e` |
@@ -34,7 +34,7 @@ ForensiQ implements a **modern dark design system** tailored for high-density fo
 
 ## 3. Typography Standards
 
-* **Primary Font:** [Inter](https://fonts.google.com/specimen/Inter) (`font-sans`)
+* **Primary Font:** [Aptos](https://fonts.cdnfonts.com/css/aptos) / Inter (`font-sans`)
 * **Monospace Font:** [JetBrains Mono](https://fonts.google.com/specimen/JetBrains+Mono) (`font-mono`)
   * **MUST** be used for:
     * Reference & Transaction IDs (`TXN-98412`)
@@ -56,12 +56,11 @@ ForensiQ implements a **modern dark design system** tailored for high-density fo
 ### 4.2 Page Header — `<c-page_header>`
 ```html
 <c-page_header 
-    title="Forensic Transaction Ledger" 
-    subtitle="Interactive financial audit log."
-    icon="fa-solid fa-money-bill-transfer"
+    title="Q-Bank" 
+    subtitle="Multi-bank transaction ledger and forensic audit analyzer."
+    icon="fa-solid fa-building-columns"
     icon_color="text-amber-500"
-    category="Q-Bank Analytics"
-    section="Forensic Engine">
+    back_url="/">
 
     <!-- Action Slot -->
     <button class="px-3.5 py-2 rounded-lg bg-zinc-900 dark:bg-amber-500 text-white dark:text-zinc-950 text-xs font-bold shadow-sm">
@@ -70,7 +69,18 @@ ForensiQ implements a **modern dark design system** tailored for high-density fo
 </c-page_header>
 ```
 
-### 4.3 KPI Metric Card — `<c-stat_card>`
+### 4.3 Centralized File Uploader — `<c-file_uploader>`
+```html
+<c-file_uploader 
+    name="statement_file"
+    accept=".csv,.xlsx,.json,.pdf"
+    label="Bank Statement Ingestion"
+    hint="Drag & drop bank statement (CSV/Excel) or click to browse"
+    badge="SHA-256 Hash Verified"
+    required />
+```
+
+### 4.4 KPI Metric Card — `<c-stat_card>`
 ```html
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     <c-stat_card 
@@ -90,7 +100,7 @@ ForensiQ implements a **modern dark design system** tailored for high-density fo
 </div>
 ```
 
-### 4.4 Filter Toolbar — `<c-filter_bar>`
+### 4.5 Filter Toolbar — `<c-filter_bar>`
 ```html
 <c-filter_bar cols="4">
     <!-- Filter inputs -->
@@ -110,7 +120,7 @@ ForensiQ implements a **modern dark design system** tailored for high-density fo
 </c-filter_bar>
 ```
 
-### 4.5 Card Container — `<c-card>`
+### 4.6 Card Container — `<c-card>`
 ```html
 <c-card title="Suspect Entity Profile" subtitle="Account #CANR-****-1002" icon="fa-solid fa-user-shield" icon_color="text-amber-500">
     <c-slot name="actions">
@@ -125,14 +135,14 @@ ForensiQ implements a **modern dark design system** tailored for high-density fo
 </c-card>
 ```
 
-### 4.6 Status & Risk Badge — `<c-badge>`
+### 4.7 Status & Risk Badge — `<c-badge>`
 ```html
 <c-badge text="Escalated" variant="rose" icon="fa-solid fa-triangle-exclamation" />
 <c-badge text="Verified" variant="emerald" icon="fa-solid fa-check" />
 <c-badge text="In Review" variant="sky" icon="fa-solid fa-hourglass-half" />
 ```
 
-### 4.7 Forensic Detail Modal — `<c-modal>`
+### 4.8 Forensic Detail Modal — `<c-modal>`
 ```html
 <c-modal id="entity-modal" title="Entity Dossier" subtitle="Forensic Details" icon="fa-solid fa-shield-halved">
     <div class="space-y-3 text-sm">
@@ -146,12 +156,12 @@ ForensiQ implements a **modern dark design system** tailored for high-density fo
 </c-modal>
 ```
 
-### 4.8 Plotly Chart Container — `<c-chart>`
+### 4.9 Plotly Chart Container — `<c-chart>`
 ```html
 <c-chart title="Vendor Outflow Distribution" subtitle="Monthly aggregated debits" :figure_html="chart_html" />
 ```
 
-### 4.9 Tabulator Data Grid — `<c-data_grid>`
+### 4.10 Tabulator Data Grid — `<c-data_grid>`
 ```html
 <c-data_grid 
     id="transactions-table" 
@@ -162,8 +172,8 @@ ForensiQ implements a **modern dark design system** tailored for high-density fo
     pagination_size="10" />
 ```
 
-### 4.10 Forensic Module Engine Card — `<c-module_card>`
-Used on landing pages and workstation engine selectors:
+### 4.11 Forensic Module Engine Card — `<c-module_card>`
+Used on landing pages. Active engines render vibrant accent colors, while in-development engines (`tag="BUILDING"`) automatically render in clean black-and-white monochrome styling:
 ```html
 <c-module_card 
     num="01" 
@@ -171,13 +181,12 @@ Used on landing pages and workstation engine selectors:
     name="Bank" 
     tag="LIVE" 
     accent="orange" 
-    href="/demo/tabulator/" 
-    tagline="Reads statements. Flags keywords.">
+    href="/bank/" 
+    tagline="Multi-Bank Forensic Analyzer">
     <p><span class="text-[#e87a4d] dark:text-[#f08a5d] font-bold">→</span> Flagged transactions, vendor &amp; party summary,</p>
     <p><span class="text-[#e87a4d] dark:text-[#f08a5d] font-bold">→</span> Tuneable watchlist per investigation.</p>
 </c-module_card>
 ```
-*Accents available:* `orange`, `gold`, `purple`, `teal`, `rose`, `amber`.
 
 ---
 

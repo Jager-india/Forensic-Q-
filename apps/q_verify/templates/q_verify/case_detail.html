@@ -6,13 +6,7 @@
         subtitle="{{ case.case_ref }} &bull; Custodian: {{ case.custodian_name }}{% if case.custodian_department %} ({{ case.custodian_department }}){% endif %}" 
         icon="fa-solid fa-stamp"
         icon_color="text-rose-400"
-        category="Q-Verify" 
-        section="Case Workstation">
-        
-        <a href="{% url 'q_verify:dashboard' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 transition">
-            <i class="fa-solid fa-arrow-left text-[10px]"></i>
-            <span>All Verification Cases</span>
-        </a>
+        back_url="/verify/">
     </c-page_header>
 
     <!-- Top KPI Stat Cards -->
@@ -120,7 +114,7 @@
     </div>
 
     <!-- Slide-Over Forensic Reader Drawer -->
-    <div id="document-reader-drawer" class="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-white dark:bg-[#141519] border-l border-slate-200 dark:border-zinc-800 shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col">
+    <div id="document-reader-drawer" class="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-white dark:bg-[#1c0e20] border-l border-[#e4d5e6] dark:border-[#351c3a] shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col">
         
         <!-- Drawer Header -->
         <div class="p-5 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between">
