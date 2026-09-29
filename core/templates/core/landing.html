@@ -3,16 +3,14 @@
     <!-- Page Header Section -->
     <div class="mb-8">
         <div>
-            <div class="flex items-center space-x-2 text-xs font-mono font-semibold uppercase tracking-wider text-amber-500 mb-1.5">
+            <div
+                class="flex items-center space-x-2 text-xs font-mono font-semibold uppercase tracking-wider text-amber-500 mb-1.5">
                 <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span>Corporate Forensic &bull; Audit Suite</span>
+                <span>In-house digital forensic audit ecosystem &bull; AI-Assisted</span>
             </div>
             <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
                 Investigation Platform
             </h1>
-            <p class="text-sm text-slate-500 dark:text-zinc-400 mt-1 max-w-2xl">
-                Unified intelligence workspace for financial tracing, communication audits, and cross-source evidence correlation.
-            </p>
         </div>
     </div>
 
@@ -20,17 +18,12 @@
     <div class="flex flex-wrap justify-center gap-6">
         {% for module in modules %}
         <div class="w-full md:w-[calc(50%-12px)] lg:w-[calc(33.333333%-16px)] flex">
-            <c-module_card 
-                :num="module.num" 
-                :category="module.category" 
-                :name="module.name" 
-                :tag="module.tag" 
-                :accent="module.accent" 
-                :href="module.href" 
-                :tagline="module.tagline" />
+            <c-module_card :num="module.num" :category="module.category" :name="module.name" :tag="module.tag"
+                :accent="module.accent" :href="module.href" :tagline="module.tagline" />
         </div>
         {% empty %}
-        <div class="w-full p-12 text-center text-slate-500 dark:text-zinc-500 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800">
+        <div
+            class="w-full p-12 text-center text-slate-500 dark:text-zinc-500 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800">
             <i class="fa-solid fa-folder-open text-4xl text-amber-500 mb-3 block"></i>
             <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">No Active Modules</h3>
             <p class="text-xs">No investigation modules are currently configured for this session.</p>

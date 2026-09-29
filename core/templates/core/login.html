@@ -36,6 +36,7 @@
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
                         mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+                        aptos: ['Aptos', 'Aptos Display', 'Segoe UI', 'system-ui', 'sans-serif'],
                     },
                     colors: {
                         zinc: {
@@ -74,10 +75,8 @@
     <header class="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
         <div class="flex items-center">
             <span
-                class="text-2xl font-black tracking-tight text-white drop-shadow-md flex items-center select-none leading-none">
-                <span>Forensi</span>
-                <img src="{% static 'core/images/letter_q_orange.png' %}" alt="Q"
-                    class="inline-block h-[1.18em] w-auto ml-[0.05em] translate-y-[0.08em] filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.5)]">
+                class="font-aptos text-xs sm:text-sm font-bold tracking-wide text-white/70 drop-shadow-md select-none leading-tight">
+                AUDIT-PLANT<br>HYUNDAI MOTOR INDIA LIMITED
             </span>
         </div>
 
@@ -104,6 +103,15 @@
 
                 <!-- Header Content -->
                 <div class="text-center mb-8">
+                    <h1
+                        class="text-4xl font-black tracking-tight text-slate-900 dark:text-white flex items-center justify-center select-none leading-none">
+                        <span>Forensi</span>
+                        <img src="{% static 'core/images/letter_q_orange.png' %}" alt="Q"
+                            class="inline-block h-[1.18em] w-auto ml-[0.05em] translate-y-[0.08em] filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.4)]">
+                    </h1>
+                    <p class="text-s text-slate-500 dark:text-zinc-400 mt-1.5 max-w-xs mx-auto">
+                        In House developed Audit Forensic Ecosystem.
+                    </p>
                     <div
                         class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 mb-4 shadow-inner">
                         <i class="fa-solid fa-shield-halved text-2xl"></i>
@@ -112,15 +120,6 @@
                         class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 mb-2">
                         Authorized Personnel Only
                     </div>
-                    <h1
-                        class="text-3xl font-black tracking-tight text-slate-900 dark:text-white flex items-center justify-center select-none leading-none">
-                        <span>Forensi</span>
-                        <img src="{% static 'core/images/letter_q_orange.png' %}" alt="Q"
-                            class="inline-block h-[1.18em] w-auto ml-[0.05em] translate-y-[0.08em] filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.4)]">
-                    </h1>
-                    <p class="text-xs text-slate-500 dark:text-zinc-400 mt-1.5 max-w-xs mx-auto">
-                        In House developed Audit Forensic Ecosystem.
-                    </p>
                 </div>
 
                 <!-- Error Alert -->
@@ -173,9 +172,6 @@
                 class="mt-6 flex items-center justify-center space-x-4 text-[11px] text-zinc-300/80 font-medium drop-shadow-sm">
                 <span class="flex items-center"><i class="fa-solid fa-lock text-[10px] mr-1 text-emerald-400"></i>
                     Encrypted Audit Vault</span>
-                <span>&bull;</span>
-                <span class="flex items-center"><i class="fa-solid fa-shield text-[10px] mr-1 text-sky-400"></i>
-                    Corporate Compliance</span>
             </div>
 
         </div>
