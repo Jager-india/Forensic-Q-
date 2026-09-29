@@ -60,27 +60,25 @@
 
     <!-- Live Wallpaper Video Background (Vivid HUD Elements) -->
     <div class="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <video 
-            class="absolute inset-0 w-full h-full object-cover opacity-80 filter brightness-100 contrast-110"
-            autoplay 
-            loop 
-            muted 
-            playsinline>
+        <video class="absolute inset-0 w-full h-full object-cover opacity-80 filter brightness-100 contrast-110"
+            autoplay loop muted playsinline>
             <source src="{% static 'core/videos/hud-elements.mp4' %}" type="video/mp4">
         </video>
         <!-- Balanced Vignette to Keep Center Card Crystal Clear -->
-        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(9,9,11,0.5)_0%,_rgba(9,9,11,0.15)_45%,_rgba(9,9,11,0.75)_100%)]"></div>
+        <div
+            class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(9,9,11,0.5)_0%,_rgba(9,9,11,0.15)_45%,_rgba(9,9,11,0.75)_100%)]">
+        </div>
     </div>
 
     <!-- Top Bar with Logo & Theme Toggle -->
     <header class="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-            <div
-                class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 flex items-center justify-center text-zinc-950 font-black text-xl shadow-lg shadow-amber-500/20">
-                Q
-            </div>
-            <span class="text-xl font-bold tracking-tight text-white drop-shadow-md">Forensi<span
-                    class="text-amber-400 font-extrabold">Q</span></span>
+        <div class="flex items-center">
+            <span
+                class="text-2xl font-black tracking-tight text-white drop-shadow-md flex items-center select-none leading-none">
+                <span>Forensi</span>
+                <img src="{% static 'core/images/letter_q_orange.png' %}" alt="Q"
+                    class="inline-block h-[1.18em] w-auto ml-[0.05em] translate-y-[0.08em] filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.5)]">
+            </span>
         </div>
 
         <!-- Theme Toggle -->
@@ -114,9 +112,12 @@
                         class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 mb-2">
                         Authorized Personnel Only
                     </div>
-                    <!-- <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Platform Access</h1> -->
-                    <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Forensi<span
-                            class="text-amber-500">Q</span></h1>
+                    <h1
+                        class="text-3xl font-black tracking-tight text-slate-900 dark:text-white flex items-center justify-center select-none leading-none">
+                        <span>Forensi</span>
+                        <img src="{% static 'core/images/letter_q_orange.png' %}" alt="Q"
+                            class="inline-block h-[1.18em] w-auto ml-[0.05em] translate-y-[0.08em] filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.4)]">
+                    </h1>
                     <p class="text-xs text-slate-500 dark:text-zinc-400 mt-1.5 max-w-xs mx-auto">
                         In House developed Audit Forensic Ecosystem.
                     </p>
