@@ -29,28 +29,34 @@
 </head>
 
 <body
-    class="bg-[#f4ecf5] dark:bg-[#140a17] text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col justify-between transition-colors duration-200 selection:bg-amber-500 selection:text-zinc-950 relative overflow-x-hidden">
+    class="bg-slate-900 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 min-h-screen flex flex-col justify-between transition-colors duration-200 selection:bg-amber-500 selection:text-zinc-950 relative overflow-x-hidden">
 
     <!-- Live Wallpaper Video Background (Vivid HUD Elements) -->
-    <div class="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0 bg-black">
-        <video class="absolute inset-0 w-full h-full object-cover opacity-100 filter brightness-100 contrast-110"
-            autoplay loop muted playsinline>
+    <div class="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
+        <video 
+            class="absolute inset-0 w-full h-full object-cover opacity-80 filter brightness-100 contrast-110"
+            autoplay 
+            loop 
+            muted 
+            playsinline>
             <source src="{% static 'core/videos/hud-elements.mp4' %}" type="video/mp4">
         </video>
+        <!-- Balanced Vignette to Keep Center Card Crystal Clear -->
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(9,9,11,0.5)_0%,_rgba(9,9,11,0.15)_45%,_rgba(9,9,11,0.75)_100%)]"></div>
     </div>
 
     <!-- Top Bar with Logo & Theme Toggle -->
     <header class="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
         <div class="flex items-center">
             <span
-                class="font-aptos text-xs sm:text-sm font-bold tracking-wide text-white/70 drop-shadow-md select-none leading-tight">
+                class="font-aptos text-xs sm:text-sm font-bold tracking-wide text-white/80 drop-shadow-sm select-none leading-tight">
                 AUDIT-PLANT<br>HYUNDAI MOTOR INDIA LIMITED
             </span>
         </div>
 
         <!-- Theme Toggle -->
         <button id="theme-toggle" type="button" aria-label="Toggle Dark Mode"
-            class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-600 dark:text-zinc-300 hover:bg-white/80 dark:hover:bg-white/10 border border-slate-300 dark:border-white/20 bg-white/60 dark:bg-white/5 transition backdrop-blur-md shadow-sm">
+            class="w-9 h-9 rounded-lg flex items-center justify-center text-zinc-300 hover:bg-white/10 border border-white/20 bg-white/5 transition backdrop-blur-md shadow-sm">
             <i id="theme-toggle-dark-icon" class="hidden fa-solid fa-moon text-sm text-sky-400"></i>
             <i id="theme-toggle-light-icon" class="hidden fa-solid fa-sun text-sm text-amber-400"></i>
         </button>
@@ -62,7 +68,7 @@
 
             <!-- Card Container -->
             <div
-                class="bg-white/95 dark:bg-zinc-900/90 border border-theme-border dark:border-zinc-800/80 rounded-2xl shadow-xl dark:shadow-2xl shadow-purple-950/5 dark:shadow-black/80 p-7 sm:p-9 backdrop-blur-xl relative transition-colors duration-300">
+                class="bg-zinc-900/90 border border-zinc-800/80 rounded-2xl shadow-2xl shadow-black/80 p-7 sm:p-9 backdrop-blur-xl relative">
 
                 <!-- Glowing Border Accent -->
                 <div
@@ -72,21 +78,21 @@
                 <!-- Header Content -->
                 <div class="text-center mb-8">
                     <h1
-                        class="text-4xl font-black tracking-tight text-slate-900 dark:text-white flex items-center justify-center select-none leading-none">
+                        class="text-4xl font-black tracking-tight text-white flex items-center justify-center select-none leading-none">
                         <span>Forensi</span>
                         <img src="{% static 'core/images/letter_q_orange.png' %}" alt="Q"
                             class="inline-block h-[1.18em] w-auto ml-[0.05em] translate-y-[0.08em] filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.4)]">
                     </h1>
-                    <p class="text-sm text-slate-600 dark:text-zinc-300/90 mt-2 max-w-xs mx-auto leading-relaxed">
+                    <p class="text-sm text-zinc-300/90 mt-2 max-w-xs mx-auto leading-relaxed">
                         In House developed Audit Forensic Ecosystem.
                     </p>
                     <div
-                        class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 my-4 shadow-inner">
+                        class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 my-4 shadow-inner">
                         <i class="fa-solid fa-shield-halved text-2xl"></i>
                     </div>
                     <div>
                         <span
-                            class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
+                            class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-amber-950/60 text-amber-400 border border-amber-800/40">
                             Authorized Personnel Only
                         </span>
                     </div>
@@ -95,9 +101,8 @@
                 <!-- Error Alert -->
                 {% if error %}
                 <div
-                    class="mb-6 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800/60 flex items-start space-x-3 text-rose-800 dark:text-rose-300 text-xs">
-                    <i
-                        class="fa-solid fa-circle-exclamation text-rose-500 dark:text-rose-400 text-sm mt-0.5 flex-shrink-0"></i>
+                    class="mb-6 p-3.5 rounded-xl bg-rose-950/60 border border-rose-800/60 flex items-start space-x-3 text-rose-300 text-xs">
+                    <i class="fa-solid fa-circle-exclamation text-rose-400 text-sm mt-0.5 flex-shrink-0"></i>
                     <div class="flex-1 font-medium leading-relaxed">{{ error }}</div>
                 </div>
                 {% endif %}
@@ -111,17 +116,17 @@
                     <div>
                         <div class="relative rounded-xl shadow-sm">
                             <div
-                                class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-zinc-400">
+                                class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-400">
                                 <i class="fa-solid fa-key text-xs"></i>
                             </div>
 
                             <input type="password" name="password" id="portal-password" required autofocus
                                 placeholder="Enter Security Key..."
-                                class="w-full pl-10 pr-11 py-2.5 text-sm rounded-xl border border-slate-300 dark:border-zinc-700/80 bg-white dark:bg-zinc-950/90 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/60 focus:border-amber-500 font-mono transition">
+                                class="w-full pl-10 pr-11 py-2.5 text-sm rounded-xl border border-zinc-700/80 bg-zinc-950/90 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/60 focus:border-amber-500 font-mono transition">
 
                             <!-- Show / Hide Password Button -->
                             <button type="button" id="btn-toggle-password" tabindex="-1"
-                                class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 dark:text-zinc-400 dark:hover:text-zinc-200 transition">
+                                class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-400 hover:text-zinc-200 transition">
                                 <i id="eye-icon" class="fa-solid fa-eye text-xs"></i>
                             </button>
                         </div>
@@ -140,9 +145,8 @@
 
             <!-- Security Footer Note -->
             <div
-                class="mt-6 flex items-center justify-center space-x-4 text-[11px] text-slate-500 dark:text-zinc-300/80 font-medium drop-shadow-sm">
-                <span class="flex items-center"><i
-                        class="fa-solid fa-lock text-[10px] mr-1 text-emerald-500 dark:text-emerald-400"></i>
+                class="mt-6 flex items-center justify-center space-x-4 text-[11px] text-zinc-300/80 font-medium drop-shadow-sm">
+                <span class="flex items-center"><i class="fa-solid fa-lock text-[10px] mr-1 text-emerald-400"></i>
                     Encrypted Audit Vault</span>
             </div>
 
@@ -150,8 +154,7 @@
     </main>
 
     <!-- Footer -->
-    <footer
-        class="relative z-10 w-full py-4 text-center text-xs text-slate-500 dark:text-zinc-400/90 font-medium drop-shadow-sm">
+    <footer class="relative z-10 w-full py-4 text-center text-xs text-zinc-400/90 font-medium drop-shadow-sm">
         ForensiQ &bull; Audit Forensic Investigation Platform
     </footer>
 

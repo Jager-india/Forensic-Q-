@@ -80,10 +80,10 @@ DEFAULT_MODULE_SPECS = {
         "num": "08",
         "category": "ERP / RECORDS",
         "name": "Ledger",
-        "tag": "BUILDING",
+        "tag": "LIVE",
         "accent": "copper",
-        "tagline": "ERP Transaction Forensic Analyzer",
-        "href": "/demo/tabulator/",
+        "tagline": "SAP ERP & Procurement Forensic Analyzer",
+        "href": "/ledger/",
         "order": 8,
     },
     "q_chat": {

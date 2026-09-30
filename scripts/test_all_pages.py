@@ -38,6 +38,7 @@ urls_to_test = [
     ("/chat/", "Q-Chat"),
     ("/verify/", "Q-Verify"),
     ("/scan/", "Q-Scan"),
+    ("/ledger/", "Q-Ledger"),
     ("/demo/tabulator/", "Forensic Transaction Ledger"),
     ("/demo/sandbox/", "Analytics Visualizer"),
 ]

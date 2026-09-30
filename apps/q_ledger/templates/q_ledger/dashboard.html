@@ -1,0 +1,523 @@
+<c-base title="Q-Ledger | SAP ERP & Procurement Forensic Analyzer">
+
+    <!-- Page Header matching ForensiQ App Standard -->
+    <c-page_header 
+        title="Q-Ledger" 
+        subtitle="SAP ERP & procurement forensic analysis, 3-way matching, price variance, and phantom vendor detection." 
+        icon="fa-solid fa-file-invoice-dollar"
+        icon_color="text-amber-400"
+        back_url="/">
+        
+        <div class="flex items-center gap-2">
+            <!-- Master Data Background Store Status & Upload Button -->
+            <button onclick="openMastersModal()" 
+                    title="Upload or update GL Account and SLoc master datasets stored in the background"
+                    class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-theme-surface hover:bg-theme-subtle text-theme-text text-xs font-semibold border border-theme-border transition-all cursor-pointer shadow-sm">
+                <i class="fa-solid fa-database text-purple-400"></i>
+                <span>ERP Masters</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/15 text-purple-400 border border-purple-500/30 font-bold">
+                    {{ gl_account_count|default:"18,329" }} GL · {{ sloc_count|default:"500" }} SLoc
+                </span>
+            </button>
+
+            <!-- Export Excel Button -->
+            <a href="{% url 'q_ledger:export_current_view' %}"
+               class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer">
+                <i class="fa-solid fa-file-excel text-amber-400"></i>
+                <span>Export Excel</span>
+            </a>
+
+            <!-- Import Transactional SAP Records Button -->
+            <button onclick="openUploadModal()" 
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition-all transform hover:-translate-y-0.5 cursor-pointer">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span>Import SAP Records</span>
+            </button>
+        </div>
+    </c-page_header>
+
+    <!-- Notification Messages -->
+    {% if message_success %}
+    <div class="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center space-x-3">
+        <i class="fa-solid fa-circle-check text-sm"></i>
+        <span class="font-medium">{{ message_success }}</span>
+    </div>
+    {% endif %}
+
+    {% if message_error %}
+    <div class="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center space-x-3">
+        <i class="fa-solid fa-triangle-exclamation text-sm"></i>
+        <span class="font-medium">{{ message_error }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Top KPI Summary Cards (ForensiQ c-stat_card standard 4-grid) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <c-stat_card 
+            title="Total Spend Volume" 
+            value="{{ total_amount }}" 
+            subtitle="Local Currency INR Spend" 
+            icon="fa-solid fa-indian-rupee-sign" 
+            variant="amber" />
+            
+        <c-stat_card 
+            title="Audited Counterparties" 
+            value="{{ vendor_count }}" 
+            subtitle="{{ record_count|default:'0' }} Ingested SAP Line Items" 
+            icon="fa-solid fa-users" 
+            variant="teal" />
+            
+        <c-stat_card 
+            title="Tracked Material SKUs" 
+            value="{{ material_count }}" 
+            subtitle="{{ cost_count }} Cost Centers Monitored" 
+            icon="fa-solid fa-boxes-stacked" 
+            variant="slate" />
+            
+        <c-stat_card 
+            title="Purchase Orders" 
+            value="{{ po_count }}" 
+            subtitle="{{ gl_count }} G/L Accounts Active" 
+            icon="fa-solid fa-file-lines" 
+            variant="emerald" />
+    </div>
+
+    <!-- Interactive Filter & Vendor Drilldown Bar -->
+    <div class="mb-8 p-4 rounded-2xl bg-theme-surface border border-theme-border shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <form method="POST" action="{% url 'q_ledger:dashboard' %}" class="flex-1 flex items-center space-x-3 w-full">
+            {% csrf_token %}
+            <div class="flex items-center space-x-2 text-xs font-semibold text-theme-text whitespace-nowrap">
+                <i class="fa-solid fa-filter text-amber-500"></i>
+                <span>Vendor Drilldown:</span>
+            </div>
+            <select name="vendor_filter" onchange="this.form.submit()"
+                class="flex-1 max-w-xl py-2 px-3 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:ring-2 focus:ring-amber-500/50">
+                <option value="">All Counterparties (Consolidated {{ vendor_count }} Vendors)</option>
+                {% for vendor in vendor_list %}
+                <option value="{{ vendor }}" {% if vendor == selected_vendor %}selected{% endif %}>
+                    {{ vendor }}
+                </option>
+                {% endfor %}
+            </select>
+            {% if is_vendor_filtered %}
+            <button type="submit" name="vendor_filter" value=""
+                class="px-3 py-2 rounded-xl text-xs font-semibold bg-theme-subtle hover:bg-theme-border text-theme-text transition">
+                Clear Filter
+            </button>
+            {% endif %}
+        </form>
+
+        <div class="flex items-center space-x-2 text-xs font-mono text-theme-muted">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>{{ record_count|default:"0" }} Active Line Items</span>
+        </div>
+    </div>
+
+    <!-- Visual Analytics Row (Plotly Charts) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        
+        <!-- Vendor Spend Over Years -->
+        <div class="p-5 rounded-2xl bg-theme-surface border border-theme-border shadow-sm flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-theme-text">Top Vendor Spend (By Year)</h3>
+                <span class="text-[10px] font-mono text-amber-500 font-bold">Plotly</span>
+            </div>
+            <div class="w-full overflow-hidden flex-1 flex items-center justify-center">
+                {% if vendor_chart_html %}
+                    {{ vendor_chart_html|safe }}
+                {% else %}
+                    <div class="py-12 text-center text-xs text-theme-muted">No visual data available.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Cost Center Spend Distribution -->
+        <div class="p-5 rounded-2xl bg-theme-surface border border-theme-border shadow-sm flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-theme-text">Spend by Cost Center (Lakhs)</h3>
+                <span class="text-[10px] font-mono text-amber-500 font-bold">Plotly</span>
+            </div>
+            <div class="w-full overflow-hidden flex-1 flex items-center justify-center">
+                {% if cost_chart_html %}
+                    {{ cost_chart_html|safe }}
+                {% else %}
+                    <div class="py-12 text-center text-xs text-theme-muted">No visual data available.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Cost Center & G/L Account Crosstab -->
+        <div class="p-5 rounded-2xl bg-theme-surface border border-theme-border shadow-sm flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-theme-text">Cost Center vs G/L Account</h3>
+                <span class="text-[10px] font-mono text-amber-500 font-bold">Plotly</span>
+            </div>
+            <div class="w-full overflow-hidden flex-1 flex items-center justify-center">
+                {% if gl_chart_html %}
+                    {{ gl_chart_html|safe }}
+                {% else %}
+                    <div class="py-12 text-center text-xs text-theme-muted">No visual data available.</div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Top Summary Rankings (Leaderboards) -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        
+        <!-- Top 5 Vendors -->
+        <div class="p-5 rounded-2xl bg-theme-surface border border-theme-border shadow-sm">
+            <div class="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-theme-text mb-4">
+                <i class="fa-solid fa-trophy text-amber-500"></i>
+                <span>Top 5 Vendors by Spend</span>
+            </div>
+            <div class="space-y-3">
+                {% for v in top_vendors %}
+                <div class="flex items-center justify-between text-xs py-1.5 border-b border-theme-border/50 last:border-0">
+                    <span class="text-theme-text font-medium truncate max-w-[180px]">{{ v.vendor_id }} - {{ v.vendor_name }}</span>
+                    <span class="font-mono font-bold text-amber-500">{{ v.Formatted_Amount }}</span>
+                </div>
+                {% empty %}
+                <p class="text-xs text-theme-muted py-2">Vendor filter active or no records.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Top 5 G/L Accounts -->
+        <div class="p-5 rounded-2xl bg-theme-surface border border-theme-border shadow-sm">
+            <div class="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-theme-text mb-4">
+                <i class="fa-solid fa-book-bookmark text-purple-400"></i>
+                <span>Top 5 G/L Accounts</span>
+            </div>
+            <div class="space-y-3">
+                {% for gl in top_gl %}
+                <div class="flex items-center justify-between text-xs py-1.5 border-b border-theme-border/50 last:border-0">
+                    <span class="text-theme-text font-medium">G/L {{ gl.gl_account }}</span>
+                    <span class="font-mono font-bold text-purple-400">{{ gl.Formatted_Amount }}</span>
+                </div>
+                {% empty %}
+                <p class="text-xs text-theme-muted py-2">No G/L records available.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Top 5 Storage Locations -->
+        <div class="p-5 rounded-2xl bg-theme-surface border border-theme-border shadow-sm">
+            <div class="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-theme-text mb-4">
+                <i class="fa-solid fa-warehouse text-emerald-400"></i>
+                <span>Top 5 Storage Locations</span>
+            </div>
+            <div class="space-y-3">
+                {% for sl in top_sloc %}
+                <div class="flex items-center justify-between text-xs py-1.5 border-b border-theme-border/50 last:border-0">
+                    <span class="text-theme-text font-medium">S/Loc {{ sl.sloc_code }}</span>
+                    <span class="font-mono font-bold text-emerald-400">{{ sl.Formatted_Amount }}</span>
+                </div>
+                {% empty %}
+                <p class="text-xs text-theme-muted py-2">No storage location records available.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- 7 FORENSIC ANOMALY CHECKPOINTS (Interactive Tabs) -->
+    <!-- ============================================================ -->
+    <div x-data="{ activeTab: 'material' }" class="mb-12">
+        
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div>
+                <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-microscope text-amber-500"></i>
+                    <span>Forensic Audit Checkpoints</span>
+                </h3>
+                <p class="text-xs text-theme-muted mt-0.5">7 specialized forensic detection algorithms running across the ERP dataset.</p>
+            </div>
+        </div>
+
+        <!-- Tab Navigation Navigation Pills -->
+        <div class="flex items-center space-x-2 overflow-x-auto pb-3 mb-4 scrollbar-thin">
+            
+            <button type="button" @click="activeTab = 'material'"
+                :class="activeTab === 'material' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
+                class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
+                <i class="fa-solid fa-list-check text-xs"></i>
+                <span>1. Material List</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_material.count|default:"0" }}</span>
+            </button>
+
+            <button type="button" @click="activeTab = 'ersa'"
+                :class="activeTab === 'ersa' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
+                class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
+                <i class="fa-solid fa-screwdriver-wrench text-xs"></i>
+                <span>2. ERSA (Spares) Audit</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_ersa.count|default:"0" }}</span>
+            </button>
+
+            <button type="button" @click="activeTab = 'openpo'"
+                :class="activeTab === 'openpo' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
+                class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
+                <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                <span>3. Open POs (&gt;750d)</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_openpo.count|default:"0" }}</span>
+            </button>
+
+            <button type="button" @click="activeTab = 'unitprice'"
+                :class="activeTab === 'unitprice' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
+                class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
+                <i class="fa-solid fa-tags text-xs"></i>
+                <span>4. Price Stagnation</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_unitprice.count|default:"0" }}</span>
+            </button>
+
+            <button type="button" @click="activeTab = 'diffmaterial'"
+                :class="activeTab === 'diffmaterial' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
+                class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
+                <i class="fa-solid fa-code-compare text-xs"></i>
+                <span>5. Material Type Conflict</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_diffmaterial.count|default:"0" }}</span>
+            </button>
+
+            <button type="button" @click="activeTab = 'receiptgap'"
+                :class="activeTab === 'receiptgap' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
+                class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
+                <i class="fa-solid fa-calendar-xmark text-xs"></i>
+                <span>6. GR Gap (&gt;1 Year)</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_receiptgap.count|default:"0" }}</span>
+            </button>
+
+            <button type="button" @click="activeTab = 'receipt1year'"
+                :class="activeTab === 'receipt1year' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
+                class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
+                <i class="fa-solid fa-hourglass-end text-xs"></i>
+                <span>7. Delayed GR (&gt;1y PO)</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_receipt1year.count|default:"0" }}</span>
+            </button>
+
+        </div>
+
+        <!-- Checkpoint Content Panels -->
+        <div class="bg-theme-surface border border-theme-border rounded-2xl p-5 shadow-sm">
+            
+            <!-- Tab 1: Material List -->
+            <div x-show="activeTab === 'material'" class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-sm font-bold text-theme-text">Master Material List</h4>
+                        <p class="text-xs text-theme-muted">Catalog of all purchased items and remaining quantities.</p>
+                    </div>
+                    <span class="text-xs font-mono text-amber-500">{{ checkpoint_material.count|default:"0" }} Rows</span>
+                </div>
+                {% include "q_ledger/includes/table_view.html" with table_data=checkpoint_material %}
+            </div>
+
+            <!-- Tab 2: ERSA Spare Parts -->
+            <div x-show="activeTab === 'ersa'" x-cloak class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-sm font-bold text-theme-text">ERSA (Spare Parts) / GL 4xxxx Audit</h4>
+                        <p class="text-xs text-theme-muted">Spare parts booked under expense ledgers for potential cost inflation.</p>
+                    </div>
+                    <span class="text-xs font-mono text-amber-500">{{ checkpoint_ersa.count|default:"0" }} Rows</span>
+                </div>
+                {% include "q_ledger/includes/table_view.html" with table_data=checkpoint_ersa %}
+            </div>
+
+            <!-- Tab 3: Open POs -->
+            <div x-show="activeTab === 'openpo'" x-cloak class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-sm font-bold text-theme-text">Aging Open Purchase Orders (>750 Days)</h4>
+                        <p class="text-xs text-theme-muted">Purchase orders open for over 2 years with remaining goods receipt balances.</p>
+                    </div>
+                    <span class="text-xs font-mono text-amber-500">{{ checkpoint_openpo.count|default:"0" }} Rows</span>
+                </div>
+                {% include "q_ledger/includes/table_view.html" with table_data=checkpoint_openpo %}
+            </div>
+
+            <!-- Tab 4: Unit Price Inconsistency -->
+            <div x-show="activeTab === 'unitprice'" x-cloak class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-sm font-bold text-theme-text">Indirect Materials Price Stagnation (>2 Years)</h4>
+                        <p class="text-xs text-theme-muted">HIBE/ERSA items procured across multiple years with static price points.</p>
+                    </div>
+                    <span class="text-xs font-mono text-amber-500">{{ checkpoint_unitprice.count|default:"0" }} Rows</span>
+                </div>
+                {% include "q_ledger/includes/table_view.html" with table_data=checkpoint_unitprice %}
+            </div>
+
+            <!-- Tab 5: Conflicting Material Types -->
+            <div x-show="activeTab === 'diffmaterial'" x-cloak class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-sm font-bold text-theme-text">Same Description / Conflicting Material Types</h4>
+                        <p class="text-xs text-theme-muted">Items with identical specifications registered under different material categories.</p>
+                    </div>
+                    <span class="text-xs font-mono text-amber-500">{{ checkpoint_diffmaterial.count|default:"0" }} Rows</span>
+                </div>
+                {% include "q_ledger/includes/table_view.html" with table_data=checkpoint_diffmaterial %}
+            </div>
+
+            <!-- Tab 6: Delivery Gap -->
+            <div x-show="activeTab === 'receiptgap'" x-cloak class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-sm font-bold text-theme-text">Goods Receipt Gap > 365 Days</h4>
+                        <p class="text-xs text-theme-muted">POs with sequential delivery intervals extending beyond 1 year.</p>
+                    </div>
+                    <span class="text-xs font-mono text-amber-500">{{ checkpoint_receiptgap.count|default:"0" }} Rows</span>
+                </div>
+                {% include "q_ledger/includes/table_view.html" with table_data=checkpoint_receiptgap %}
+            </div>
+
+            <!-- Tab 7: Delayed Delivery -->
+            <div x-show="activeTab === 'receipt1year'" x-cloak class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-sm font-bold text-theme-text">Delayed Goods Receipt (> 1 Year Post-PO Date)</h4>
+                        <p class="text-xs text-theme-muted">Goods delivered more than 365 days after the original purchase order creation date.</p>
+                    </div>
+                    <span class="text-xs font-mono text-amber-500">{{ checkpoint_receipt1year.count|default:"0" }} Rows</span>
+                </div>
+                {% include "q_ledger/includes/table_view.html" with table_data=checkpoint_receipt1year %}
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- 1. MODAL: GL ACCOUNT & SLOC MASTER DATA (STORED IN BACKGROUND) -->
+    <!-- ============================================================ -->
+    <div id="masters-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 hidden">
+        <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl p-6 relative">
+            
+            <button onclick="closeMastersModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-200 cursor-pointer">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-database text-purple-400"></i>
+                <span>G/L Account & SLoc Master Configuration</span>
+            </h3>
+            <p class="text-xs text-slate-400 mb-5">
+                Upload these 2 Excel reference files once. They are stored in the background to automatically resolve G/L account names and Storage Location descriptions for all forensic audits.
+            </p>
+
+            <form method="POST" action="{% url 'q_ledger:dashboard' %}" enctype="multipart/form-data" class="space-y-5">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="upload_masters">
+
+                <!-- Centralized Cotton File Uploader for GL Account List -->
+                <c-file_uploader 
+                    id="gl_uploader"
+                    name="gl_file"
+                    accept=".xlsx,.xls"
+                    label="GL Account Master List (Excel)"
+                    hint="Upload G/L account list workbook (G/L acct, Long Text)"
+                    badge="Background Store" />
+
+                <!-- Centralized Cotton File Uploader for SLoc Desc -->
+                <c-file_uploader 
+                    id="sloc_uploader"
+                    name="sloc_file"
+                    accept=".xlsx,.xls"
+                    label="Storage Location (SLoc) Master (Excel)"
+                    hint="Upload storage location workbook (Plnt, S/Loc, Description)"
+                    badge="Background Store" />
+
+                <div class="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-zinc-800">
+                    <span class="text-[11px] font-mono text-slate-400">
+                        Current: <strong class="text-purple-400">{{ gl_account_count|default:"18,329" }}</strong> GLs, <strong class="text-purple-400">{{ sloc_count|default:"500" }}</strong> SLocs
+                    </span>
+
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="closeMastersModal()" 
+                                class="px-4 py-2 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 cursor-pointer transition">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                class="px-5 py-2 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/20 cursor-pointer transition">
+                            Save to Background Store
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- 2. MODAL: TRANSACTIONAL EVIDENCE (PR/PO & MARA) -->
+    <!-- ============================================================ -->
+    <div id="upload-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 hidden">
+        <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl p-6 relative">
+            
+            <button onclick="closeUploadModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-200 cursor-pointer">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-cloud-arrow-up text-amber-400"></i>
+                <span>Import SAP ERP Evidence</span>
+            </h3>
+            <p class="text-xs text-slate-400 mb-5">
+                Ingest SAP PR/PO extracts and optional MARA material master files. Data is cross-referenced with the background G/L and SLoc masters.
+            </p>
+
+            <form method="POST" action="{% url 'q_ledger:dashboard' %}" enctype="multipart/form-data" class="space-y-5">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="upload">
+
+                <!-- Centralized Cotton File Uploader for PR/PO -->
+                <c-file_uploader 
+                    id="prpo_uploader"
+                    name="prpo_file"
+                    accept=".xlsx,.xls"
+                    label="SAP PR/PO Extract (Excel)"
+                    hint="Drag & drop SAP PR/PO workbook or click to browse"
+                    badge="Primary Dataset"
+                    required="true" />
+
+                <!-- Centralized Cotton File Uploader for MARA -->
+                <c-file_uploader 
+                    id="mara_uploader"
+                    name="mara_file"
+                    accept=".xlsx,.xls"
+                    label="MARA Material Master (Excel)"
+                    hint="Optional: Drag & drop MARA material classification workbook"
+                    badge="Optional Master" />
+
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-zinc-800">
+                    <button type="button" onclick="closeUploadModal()" 
+                            class="px-4 py-2 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 cursor-pointer transition">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            class="px-5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-lg shadow-amber-500/20 cursor-pointer transition">
+                        Ingest & Run Audit
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modals Toggle JavaScript -->
+    <script>
+    function openMastersModal() {
+        document.getElementById('masters-modal').classList.remove('hidden');
+    }
+    function closeMastersModal() {
+        document.getElementById('masters-modal').classList.add('hidden');
+    }
+    function openUploadModal() {
+        document.getElementById('upload-modal').classList.remove('hidden');
+    }
+    function closeUploadModal() {
+        document.getElementById('upload-modal').classList.add('hidden');
+    }
+    </script>
+
+</c-base>

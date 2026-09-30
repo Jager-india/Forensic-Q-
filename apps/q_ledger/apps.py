@@ -6,12 +6,12 @@ class QLedgerConfig(AppConfig):
     name = "q_ledger"
     verbose_name = "Q-Ledger"
 
-    # Forensic Module Metadata (In Development)
+    # Forensic Module Metadata
     module_num = "08"
     module_category = "ERP / RECORDS"
     module_name = "Ledger"
-    module_tag = "BUILDING"
+    module_tag = "LIVE"
     module_accent = "copper"
-    module_tagline = "ERP Transaction Forensic Analyzer"
-    module_url = "/demo/tabulator/"
+    module_tagline = "SAP ERP & Procurement Forensic Analyzer"
+    module_url = "/ledger/"
     module_order = 8
