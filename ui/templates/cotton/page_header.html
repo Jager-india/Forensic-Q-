@@ -12,7 +12,7 @@ Props:
     {% if back_url %}
     <div class="mb-3">
         <a href="{{ back_url }}" 
-           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-[#201024] hover:bg-slate-100 dark:hover:bg-[#2c1830] text-slate-700 dark:text-zinc-300 border border-[#e4d5e6] dark:border-[#351c3a] shadow-sm transition group">
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-theme-surface hover:bg-theme-subtle text-theme-text border border-theme-border shadow-sm transition group">
             <i class="fa-solid fa-arrow-left text-[10px] group-hover:-translate-x-0.5 transition-transform"></i>
             <span>Back</span>
         </a>
@@ -21,7 +21,7 @@ Props:
 
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 select-none">
+            <h1 class="text-2xl sm:text-3xl font-black text-theme-text tracking-tight flex items-center gap-3 select-none">
                 {% if icon %}
                 <i class="{{ icon }} {{ icon_color|default:'text-amber-500' }}"></i>
                 {% endif %}
@@ -29,7 +29,7 @@ Props:
             </h1>
 
             {% if subtitle %}
-            <p class="text-slate-500 dark:text-zinc-400 text-sm mt-1 leading-relaxed">
+            <p class="text-theme-muted text-sm mt-1 leading-relaxed">
                 {{ subtitle }}
             </p>
             {% endif %}

@@ -18,17 +18,17 @@ ForensiQ implements a **modern dark-violet design system** tailored for high-den
 
 ## 2. Color Palette & Dark Mode Tokens
 
-| Surface / Element | Light Mode Class | Dark Mode Class | Hex Code (Light / Dark) |
+| Surface / Element | Semantic Tailwind Class | CSS Custom Property | Hex Code (Light / Dark) |
 | :--- | :--- | :--- | :--- |
-| **Canvas Background** | `bg-[#f4ecf5]` | `dark:bg-[#140a17]` | `#f4ecf5` / `#140a17` |
-| **Card Surface** | `bg-white` | `dark:bg-[#201024]` / `dark:bg-zinc-900` | `#ffffff` / `#201024` |
-| **Borders & Dividers** | `border-[#e4d5e6]` | `dark:border-[#351c3a]` / `dark:border-zinc-800`| `#e4d5e6` / `#351c3a` |
-| **Primary Text** | `text-[#2b122f]` / `text-slate-900` | `dark:text-zinc-100` / `text-white` | `#2b122f` / `#f4f4f5` |
-| **Muted / Subtitle Text** | `text-[#6e5472]` / `text-slate-500` | `dark:text-zinc-400` | `#6e5472` / `#a1a1aa` |
-| **Brand Accent (Amber)** | `bg-amber-500` | `bg-amber-500` / `text-amber-400` | `#f59e0b` |
-| **Positive / Credit (Emerald)**| `bg-emerald-50` | `dark:bg-emerald-950/50` | `#10b981` |
-| **Alert / Flag (Rose)** | `bg-rose-50` | `dark:bg-rose-950/50` | `#f43f5e` |
-| **Information / Links (Sky)** | `bg-sky-50` | `dark:bg-sky-950/50` | `#38bdf8` |
+| **Canvas Background** | `bg-theme-app` | `--fq-bg-app` | `#f4ecf5` / `#140a17` |
+| **Card / Container Surface** | `bg-theme-surface` | `--fq-bg-surface` | `#ffffff` / `#201024` |
+| **Elevated Surface** | `bg-theme-elevated` | `--fq-bg-surface-elevated` | `#faf5fb` / `#28152e` |
+| **Subtle Hover / Input** | `bg-theme-subtle` | `--fq-bg-subtle` | `#efe4f1` / `#190d1d` |
+| **Borders & Dividers** | `border-theme-border` | `--fq-border-subtle` | `#e4d5e6` / `#351c3a` |
+| **Strong Borders** | `border-theme-border-strong`| `--fq-border-strong` | `#cdb3d0` / `#502D55` |
+| **Primary Text** | `text-theme-text` | `--fq-text-main` | `#2b122f` / `#f4f4f5` |
+| **Muted / Subtitle Text** | `text-theme-muted` | `--fq-text-muted` | `#6e5472` / `#d7c4d9` |
+| **Brand Accent (Amber)** | `bg-amber-500` / `text-amber-500` | `--fq-accent-amber` | `#f59e0b` |
 
 ---
 

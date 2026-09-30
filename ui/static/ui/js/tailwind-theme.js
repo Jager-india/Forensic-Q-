@@ -14,24 +14,23 @@ window.tailwind.config = {
                 aptos: ['Aptos', 'Aptos Display', 'Segoe UI', 'system-ui', 'sans-serif'],
             },
             colors: {
+                // Semantic Dynamic Theme Aliases (Powered by CSS Variables)
+                theme: {
+                    app: 'var(--fq-bg-app)',
+                    surface: 'var(--fq-bg-surface)',
+                    elevated: 'var(--fq-bg-surface-elevated)',
+                    subtle: 'var(--fq-bg-subtle)',
+                    border: 'var(--fq-border-subtle)',
+                    'border-strong': 'var(--fq-border-strong)',
+                    text: 'var(--fq-text-main)',
+                    muted: 'var(--fq-text-muted)',
+                    subtle_text: 'var(--fq-text-subtle)',
+                    brand: 'var(--fq-brand-violet)',
+                },
                 zinc: {
                     800: '#351c3a',
                     850: '#2b1630',
                     900: '#201024',
-                    950: '#140a17',
-                },
-                violet: {
-                    brand: '#502D55',
-                    50: '#faf5fb',
-                    100: '#f4ecf5',
-                    200: '#e4d5e6',
-                    300: '#cdb3d0',
-                    400: '#ba88bf',
-                    500: '#96579c',
-                    600: '#773e7c',
-                    700: '#502D55',
-                    800: '#3d2241',
-                    900: '#2c1830',
                     950: '#140a17',
                 },
                 amber: {
