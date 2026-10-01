@@ -70,10 +70,10 @@ DEFAULT_MODULE_SPECS = {
         "num": "07",
         "category": "VOICE",
         "name": "Voice",
-        "tag": "BUILDING",
-        "accent": "steel",
+        "tag": "LIVE",
+        "accent": "indigo",
         "tagline": "Voice Transcript Intelligence Analyzer",
-        "href": "/demo/sandbox/",
+        "href": "/voice/",
         "order": 7,
     },
     "q_ledger": {

@@ -196,3 +196,9 @@ if not PORTAL_ACCESS_PASSWORD:
         "CRITICAL CONFIGURATION ERROR: PORTAL_ACCESS_PASSWORD environment variable is missing. "
         "Define PORTAL_ACCESS_PASSWORD in your .env file."
     )
+
+# Q-Voice Forensic Speech-to-Text / Whisper Model Endpoint
+VOICE_MODEL_ENDPOINT = os.environ.get(
+    "VOICE_MODEL_ENDPOINT", "http://127.0.0.1:8434/v1/audio/transcriptions"
+)
+VOICE_API_TIMEOUT = float(os.environ.get("VOICE_API_TIMEOUT", "60.0"))

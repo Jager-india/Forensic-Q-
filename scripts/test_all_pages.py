@@ -39,6 +39,7 @@ urls_to_test = [
     ("/verify/", "Q-Verify"),
     ("/scan/", "Q-Scan"),
     ("/ledger/", "Q-Ledger"),
+    ("/voice/", "Q-Voice"),
     ("/demo/tabulator/", "Forensic Transaction Ledger"),
     ("/demo/sandbox/", "Analytics Visualizer"),
 ]

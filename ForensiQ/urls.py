@@ -13,7 +13,7 @@ urlpatterns = [
     path("bank/", include("q_bank.urls")),
     path("chat/", include("q_chat.urls")),
     path("ledger/", include("q_ledger.urls")),
-    # path("voice/", include("q_voice.urls")),
+    path("voice/", include("q_voice.urls")),
 ]
 
 if settings.DEBUG:
