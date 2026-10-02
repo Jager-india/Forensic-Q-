@@ -10,6 +10,14 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from .backend.analysis_functions import indian_rupee_format
+from .backend.data_preprocessing import (
+    dfmain,
+    get_master_gl_data,
+    get_master_sloc_data,
+    process_data,
+    process_mara_data,
+)
 from .models import (
     ERPThreeWayMatch,
     LedgerDataset,
@@ -18,14 +26,6 @@ from .models import (
     VendorMaster,
 )
 from .selectors import prepare_table_dict
-from .services.analysis_functions import indian_rupee_format
-from .services.data_preprocessing import (
-    dfmain,
-    get_master_gl_data,
-    get_master_sloc_data,
-    process_data,
-    process_mara_data,
-)
 
 
 class QLedgerModelTests(TestCase):
@@ -117,7 +117,7 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertEqual(err_formatted, "₹ 0")
 
     def test_analysis_mater_list(self):
-        from .services.analysis_functions import mater_list
+        from .backend.analysis_functions import mater_list
 
         raw_df = pd.DataFrame(
             {
@@ -146,7 +146,7 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertEqual(res["PO Rem"].iloc[0], 20)
 
     def test_analysis_ersa(self):
-        from .services.analysis_functions import ersa
+        from .backend.analysis_functions import ersa
 
         raw_df = pd.DataFrame(
             {
@@ -163,7 +163,7 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertEqual(res["Material"].iloc[0], "MAT-A")
 
     def test_analysis_indir_mat(self):
-        from .services.analysis_functions import indir_mat
+        from .backend.analysis_functions import indir_mat
 
         raw_df = pd.DataFrame(
             {
@@ -183,7 +183,7 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertIn("Date_Diff", res.columns)
 
     def test_analysis_dif_mat3_and_group_by_words(self):
-        from .services.analysis_functions import dif_mat3, group_by_words
+        from .backend.analysis_functions import dif_mat3, group_by_words
 
         raw_df = pd.DataFrame(
             {
@@ -203,7 +203,7 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertEqual(len(res), 2)
 
     def test_analysis_openpo(self):
-        from .services.analysis_functions import openpo
+        from .backend.analysis_functions import openpo
 
         raw_df = pd.DataFrame(
             {
@@ -225,7 +225,7 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertEqual(res["PO Rem."].iloc[0], 40)
 
     def test_analysis_tab66_and_process_data_t7(self):
-        from .services.analysis_functions import process_data_t7, tab66
+        from .backend.analysis_functions import process_data_t7, tab66
 
         raw_df = pd.DataFrame(
             {
@@ -250,7 +250,7 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertIsNotNone(res_t7)
 
     def test_plotly_chart_engines(self):
-        from .services.analysis_functions import row2_c1, row2_c2, row2_c3
+        from .backend.analysis_functions import row2_c1, row2_c2, row2_c3
 
         sample_df = pd.DataFrame(
             {
@@ -273,7 +273,7 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertIsNotNone(fig3)
 
     def test_data_preprocessing_helpers(self):
-        from .services.data_preprocessing import dfmain, get_master_gl_data, get_master_sloc_data
+        from .backend.data_preprocessing import dfmain, get_master_gl_data, get_master_sloc_data
 
         gl_df = get_master_gl_data()
         self.assertIsInstance(gl_df, pd.DataFrame)
@@ -300,7 +300,7 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertIn("Material Type Description", enriched.columns)
 
     def test_process_data_excel_and_mara(self):
-        from .services.data_preprocessing import process_data, process_mara_data
+        from .backend.data_preprocessing import process_data, process_mara_data
 
         prpo_df = pd.DataFrame(
             {
@@ -471,9 +471,9 @@ class QLedgerViewsTests(TestCase):
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    @patch("q_ledger.views.process_data")
-    @patch("q_ledger.views.process_mara_data")
-    @patch("q_ledger.views.dfmain")
+    @patch("q_ledger.services.process_data")
+    @patch("q_ledger.services.process_mara_data")
+    @patch("q_ledger.services.dfmain")
     def test_dashboard_view_upload_action(self, mock_dfmain, mock_mara, mock_process):
         sample_df = pd.DataFrame(
             {
