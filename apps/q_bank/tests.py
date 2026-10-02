@@ -24,6 +24,7 @@ from .backend.statement_parser import (
 from .models import AuditedPerson, BankAccount, BankTransaction, WatchlistRule
 from .selectors import (
     fuzzy_search_transactions,
+    get_all_statement_transactions,
     get_bank_dashboard_metrics,
     get_frequent_counterparties,
     get_frequent_transactions_breakdown,
@@ -506,3 +507,62 @@ class QBankServicesAndSelectorsTests(TestCase):
             exp_res["Content-Type"],
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+    def test_get_all_statement_transactions(self):
+        person = self.account.person
+        # 1. Filter by account_id
+        txns_acc = get_all_statement_transactions(account_id=self.account.id)
+        self.assertEqual(len(txns_acc), 5)
+        sample = txns_acc[0]
+        self.assertIn("id", sample)
+        self.assertIn("date", sample)
+        self.assertIn("narration", sample)
+        self.assertIn("closing_balance_formatted", sample)
+        self.assertIsInstance(sample["credit_amount"], float)
+        self.assertIsInstance(sample["debit_amount"], float)
+
+        # 2. Filter by person_id
+        txns_person = get_all_statement_transactions(person_id=person.id)
+        self.assertEqual(len(txns_person), 5)
+
+        # 3. Limit parameter
+        txns_limited = get_all_statement_transactions(person_id=person.id, limit=2)
+        self.assertEqual(len(txns_limited), 2)
+
+        # 4. Non-existent filter returns empty list
+        empty_res = get_all_statement_transactions(account_id=uuid.uuid4())
+        self.assertEqual(len(empty_res), 0)
+
+    def test_person_detail_view_closing_balance_and_all_txns(self):
+        person = self.account.person
+        # 1. View without specific account (aggregate across accounts)
+        url = reverse("q_bank:person_detail", kwargs={"person_id": person.id})
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("all_transactions", res.context)
+        self.assertGreaterEqual(len(res.context["all_transactions"]), 5)
+        self.assertIn("closing_balance", res.context["view_metrics"])
+        self.assertIn("closing_balance_formatted", res.context["view_metrics"])
+        self.assertEqual(
+            res.context["view_metrics"]["closing_balance"],
+            Decimal("1290000.00"),
+        )
+
+        # 2. View with selected account_id query param
+        res_acc = self.client.get(f"{url}?account_id={self.account.id}")
+        self.assertEqual(res_acc.status_code, 200)
+        self.assertEqual(res_acc.context["selected_account"].id, self.account.id)
+        self.assertEqual(
+            res_acc.context["view_metrics"]["closing_balance"],
+            Decimal("1290000.00"),
+        )
+
+        # 3. Person with an account that has no transactions
+        empty_acc = BankAccount.objects.create(
+            person=person,
+            bank_name="Empty Bank",
+            account_number="ACC-EMPTY-001",
+        )
+        res_empty = self.client.get(f"{url}?account_id={empty_acc.id}")
+        self.assertEqual(res_empty.status_code, 200)
+        self.assertEqual(res_empty.context["view_metrics"]["closing_balance"], Decimal("0.00"))

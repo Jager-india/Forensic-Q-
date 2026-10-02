@@ -429,6 +429,7 @@ def get_cdm_transactions(
 def get_all_statement_transactions(
     account_id: str | uuid.UUID | None = None,
     person_id: str | uuid.UUID | None = None,
+    limit: int = 5000,
 ) -> list[dict[str, Any]]:
     """
     Retrieves all transactions for an account or person, normalized with formatted
@@ -439,6 +440,9 @@ def get_all_statement_transactions(
         qs = qs.filter(account_id=account_id)
     elif person_id:
         qs = qs.filter(account__person_id=person_id)
+
+    if limit > 0:
+        qs = qs[:limit]
 
     rows = []
     for t in qs:
