@@ -101,7 +101,6 @@ class QChatForensicTests(TestCase):
         self.assertEqual(r_del.status_code, 302)
         self.assertIsNone(get_chat_channel_by_id(self.channel.id))
 
-
     def test_upload_chat_view_and_errors(self):
         session = self.client.session
         session["portal_authenticated"] = True
