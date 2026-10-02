@@ -4,25 +4,36 @@ Tests statement parsing, entity extraction, cash deposit detection, Hyundai rule
 """
 
 import io
+import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pandas as pd
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
+from docx import Document
 
 from .backend.statement_parser import (
     extract_clean_tracking_name,
+    extract_tables_from_word,
     format_inr,
     normalize_dataframe,
+    parse_bank_statement_dataframe,
 )
-from .models import BankAccount, BankTransaction, WatchlistRule
+from .models import AuditedPerson, BankAccount, BankTransaction, WatchlistRule
 from .selectors import (
     fuzzy_search_transactions,
     get_bank_dashboard_metrics,
     get_frequent_counterparties,
+    get_frequent_transactions_breakdown,
     get_hyundai_metrics,
 )
-from .services import delete_bank_account, ingest_bank_statement_file
+from .services import (
+    delete_audited_person,
+    delete_bank_account,
+    ingest_bank_statement_file,
+)
 
 
 class QBankStatementTests(TestCase):
@@ -67,6 +78,73 @@ class QBankStatementTests(TestCase):
         self.assertIn("Closing Balance", normalized.columns)
         self.assertEqual(normalized["Debit Amount"].iloc[0], 1500.00)
         self.assertEqual(normalized["Credit Amount"].iloc[1], 25000.00)
+
+    def test_extract_clean_tracking_name_edge_cases(self):
+        # Numeric VPA left side
+        name = extract_clean_tracking_name("UPI/12345/9988776655@paytm/Supermarket Supplies")
+        self.assertIn("SUPERMARKET", name.upper())
+
+        # POS with time and state code
+        name_pos = extract_clean_tracking_name("POS-PURCHASE CHENNAI TN 14:22:10 RESTAURANT")
+        self.assertTrue(len(name_pos) > 0)
+
+        # Fallback words
+        name_words = extract_clean_tracking_name("MISC TRANSFER FROM CLIENT")
+        self.assertIn("MISC", name_words.upper())
+
+        # Fallback Other Account Operations
+        name_fallback = extract_clean_tracking_name("123456 999999")
+        self.assertEqual(name_fallback, "Other Account Operations")
+
+    def test_format_inr_edge_cases(self):
+        self.assertEqual(format_inr("not_a_number"), "0.00")
+        self.assertEqual(format_inr(50), "50.00")
+        self.assertEqual(format_inr(-150000), "-1,50,000.00")
+
+    def test_extract_tables_from_word(self):
+        doc = Document()
+        table = doc.add_table(rows=2, cols=3)
+        table.cell(0, 0).text = "Date"
+        table.cell(0, 1).text = "Narration"
+        table.cell(0, 2).text = "Amount"
+        table.cell(1, 0).text = "01/01/2026"
+        table.cell(1, 1).text = "Consulting Fee"
+        table.cell(1, 2).text = "50000"
+
+        doc_buf = io.BytesIO()
+        doc.save(doc_buf)
+        doc_buf.seek(0)
+
+        df = extract_tables_from_word(doc_buf)
+        self.assertFalse(df.empty)
+
+    def test_parse_bank_statement_dataframe_various_types(self):
+        # Excel buffer
+        df_in = pd.DataFrame(
+            {
+                "Date": ["01/01/2026"],
+                "Narration": ["UPI/test@okaxis/Vendor"],
+                "Debit Amount": [1000.0],
+                "Credit Amount": [0.0],
+                "Closing Balance": [50000.0],
+                "page_num": [1],
+            }
+        )
+        xl_buf = io.BytesIO()
+        with pd.ExcelWriter(xl_buf, engine="openpyxl") as writer:
+            df_in.to_excel(writer, index=False)
+        xl_buf.seek(0)
+
+        df_out = parse_bank_statement_dataframe(xl_buf, "statement.xlsx")
+        self.assertIn("UPI_Name", df_out.columns)
+        self.assertNotIn("page_num", df_out.columns)
+
+        # Unknown extension fallback to CSV
+        csv_buf = io.BytesIO(
+            b"Date,Narration,Debit Amount,Credit Amount,Closing Balance\n01/01/2026,Cash Deposit,0,5000,55000\n"
+        )
+        df_csv = parse_bank_statement_dataframe(csv_buf, "unknown_data.dat")
+        self.assertIn("Narration", df_csv.columns)
 
 
 class QBankServicesAndSelectorsTests(TestCase):
@@ -238,7 +316,6 @@ class QBankServicesAndSelectorsTests(TestCase):
     def test_delete_person(self):
         person = self.account.person
         self.assertIsNotNone(person)
-        from .services import delete_audited_person
 
         success = delete_audited_person(person.id)
         self.assertTrue(success)
@@ -250,3 +327,182 @@ class QBankServicesAndSelectorsTests(TestCase):
         self.assertTrue(success)
         self.assertEqual(BankAccount.objects.count(), 0)
         self.assertEqual(BankTransaction.objects.count(), 0)
+
+    def test_upload_statement_view_csv(self):
+        csv_data = b"Date,Narration,Transaction ID,Debit Amount,Credit Amount,Closing Balance\n01/02/2026,UPI/8899/vendor@axis/Parts,TXN5501,12000,0,88000\n"
+        upload_file = SimpleUploadedFile("axis_statement.csv", csv_data, content_type="text/csv")
+        res = self.client.post(
+            reverse("q_bank:upload_statement"),
+            data={
+                "statement_file": upload_file,
+                "account_holder": "Rajesh Kumar",
+                "bank_name": "Axis Bank",
+                "statement_label": "Vendor Ingestion",
+                "account_number": "9182736450",
+            },
+        )
+        self.assertEqual(res.status_code, 302)
+        acc = BankAccount.objects.filter(account_holder="Rajesh Kumar").first()
+        self.assertIsNotNone(acc)
+        self.assertEqual(acc.total_transactions, 1)
+
+    def test_upload_statement_view_excel(self):
+        df = pd.DataFrame(
+            {
+                "Date": ["01/02/2026"],
+                "Narration": ["NEFT/SUPPLIER PAYMENT"],
+                "Transaction ID": ["EXCEL001"],
+                "Debit Amount": [45000.0],
+                "Credit Amount": [0.0],
+                "Closing Balance": [155000.0],
+            }
+        )
+        xl_buf = io.BytesIO()
+        with pd.ExcelWriter(xl_buf, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False)
+        xl_buf.seek(0)
+        upload_file = SimpleUploadedFile(
+            "icici_statement.xlsx",
+            xl_buf.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        res = self.client.post(
+            reverse("q_bank:upload_statement"),
+            data={
+                "statement_file": upload_file,
+                "account_holder": "ICICI Corporate",
+                "bank_name": "ICICI Bank",
+                "statement_label": "Excel Import",
+            },
+        )
+        self.assertEqual(res.status_code, 302)
+        acc = BankAccount.objects.filter(account_holder="ICICI Corporate").first()
+        self.assertIsNotNone(acc)
+        self.assertEqual(acc.total_transactions, 1)
+
+    def test_upload_statement_view_errors(self):
+        # Missing file
+        res_no_file = self.client.post(reverse("q_bank:upload_statement"), data={})
+        self.assertEqual(res_no_file.status_code, 302)
+
+        # Corrupt file
+        bad_file = SimpleUploadedFile("corrupt.csv", b"\xff\xfe\x00\x00", content_type="text/csv")
+        res_bad = self.client.post(
+            reverse("q_bank:upload_statement"),
+            data={"statement_file": bad_file, "account_holder": "Bad Data"},
+        )
+        self.assertEqual(res_bad.status_code, 302)
+
+    def test_create_and_delete_person_views(self):
+        # Create person view success
+        create_res = self.client.post(
+            reverse("q_bank:create_person"),
+            data={
+                "full_name": "Devi Prasad",
+                "employee_id": "EMP-990",
+                "department": "Finance",
+                "designation": "Manager",
+                "pan_number": "ABCDE1234F",
+                "email": "devi.prasad@company.com",
+            },
+        )
+        self.assertEqual(create_res.status_code, 302)
+        person = AuditedPerson.objects.filter(full_name="Devi Prasad").first()
+        self.assertIsNotNone(person)
+        self.assertEqual(person.employee_id, "EMP-990")
+
+        # Create person view with empty full name
+        fail_res = self.client.post(reverse("q_bank:create_person"), data={"full_name": ""})
+        self.assertEqual(fail_res.status_code, 302)
+
+        # Delete person view success
+        del_res = self.client.post(reverse("q_bank:delete_person", args=[person.id]))
+        self.assertEqual(del_res.status_code, 302)
+        self.assertFalse(AuditedPerson.objects.filter(id=person.id).exists())
+
+        # Delete non-existent person
+        bad_del = self.client.post(reverse("q_bank:delete_person", args=[uuid.uuid4()]))
+        self.assertEqual(bad_del.status_code, 302)
+
+    def test_account_detail_view_auto_link_and_404(self):
+        # Create unlinked account
+        unlinked_acc = BankAccount.objects.create(
+            account_holder="Autonomous Custodian",
+            bank_name="Canara Bank",
+            account_number="CN102938",
+            person=None,
+        )
+        res = self.client.get(reverse("q_bank:account_detail", args=[unlinked_acc.id]))
+        self.assertEqual(res.status_code, 302)
+        unlinked_acc.refresh_from_db()
+        self.assertIsNotNone(unlinked_acc.person)
+        self.assertEqual(unlinked_acc.person.full_name, "Autonomous Custodian")
+
+        # 404 for non-existent account
+        res_404 = self.client.get(reverse("q_bank:account_detail", args=[uuid.uuid4()]))
+        self.assertEqual(res_404.status_code, 404)
+
+    def test_delete_account_view_redirects(self):
+        target_acc_id = self.account.id
+        person_id = self.account.person.id
+        del_res = self.client.post(reverse("q_bank:delete_account", args=[target_acc_id]))
+        self.assertEqual(del_res.status_code, 302)
+        self.assertIn(f"/bank/person/{person_id}/", del_res.url)
+
+        # Delete non-existent account
+        bad_del = self.client.post(reverse("q_bank:delete_account", args=[uuid.uuid4()]))
+        self.assertEqual(bad_del.status_code, 302)
+
+    def test_fuzzy_search_api_and_export_frequent(self):
+        # Fuzzy search API with keywords
+        fuzzy_url = reverse("q_bank:fuzzy_search_api")
+        res = self.client.get(
+            f"{fuzzy_url}?account_id={self.account.id}&keywords=sarla&threshold=50"
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "ok")
+        self.assertGreaterEqual(data["total_matches"], 1)
+
+        # Fuzzy search with person_id and edge case empty keywords
+        self.assertEqual(
+            fuzzy_search_transactions(person_id=self.account.person.id, keywords_str=""), []
+        )
+        matches_person = fuzzy_search_transactions(
+            person_id=self.account.person.id, keywords_str="hyundai, , !!", threshold=60
+        )
+        self.assertIsInstance(matches_person, list)
+
+        # Frequent transactions breakdown with multiple credit transactions
+        BankTransaction.objects.create(
+            account=self.account,
+            txn_date=datetime.now(UTC),
+            value_date=datetime.now(UTC),
+            narration="CREDIT PAYMENT VENDOR ALPHA",
+            party_name="Vendor Alpha",
+            credit_amount=Decimal("50000.00"),
+            closing_balance=Decimal("200000.00"),
+        )
+        BankTransaction.objects.create(
+            account=self.account,
+            txn_date=datetime.now(UTC),
+            value_date=datetime.now(UTC),
+            narration="SECOND CREDIT PAYMENT VENDOR ALPHA",
+            party_name="Vendor Alpha",
+            credit_amount=Decimal("75000.00"),
+            closing_balance=Decimal("275000.00"),
+        )
+        breakdown = get_frequent_transactions_breakdown(
+            account_id=self.account.id, min_transactions=2
+        )
+        self.assertIn("credit_groups", breakdown)
+        self.assertIn("Vendor Alpha", breakdown["credit_groups"])
+
+        # Export frequent counterparties Excel
+        export_url = reverse("q_bank:export_frequent_excel")
+        exp_res = self.client.get(f"{export_url}?account_id={self.account.id}")
+        self.assertEqual(exp_res.status_code, 200)
+        self.assertEqual(
+            exp_res["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )

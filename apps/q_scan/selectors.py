@@ -35,9 +35,11 @@ def get_scanned_device_by_id(device_id: str | uuid.UUID) -> ScannedDevice | None
     """
     Retrieves a single scanned device by primary key.
     """
+    from django.core.exceptions import ValidationError
+
     try:
         return ScannedDevice.objects.get(id=device_id)
-    except (ScannedDevice.DoesNotExist, ValueError):
+    except (ScannedDevice.DoesNotExist, ValueError, ValidationError):
         return None
 
 

@@ -4,14 +4,24 @@ Unit tests for PDF inspector, Office inspector, Discrepancy analyzer, and API en
 """
 
 import io
+import tempfile
 import zipfile
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+import pypdf
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
+from PIL import Image
 
-from .backend import DiscrepancyAnalyzer, OfficeInspector, ParsedMetadata
+from .backend import (
+    DiscrepancyAnalyzer,
+    ImageInspector,
+    OfficeInspector,
+    ParsedMetadata,
+    PDFInspector,
+)
 from .models import VerificationCase, VerifiedDocument
 from .services import create_verification_case, ingest_and_verify_document
 
@@ -45,13 +55,15 @@ class QVerifyUnitTests(TestCase):
         self.assertTrue(result.has_structural_anomaly)
 
     def test_office_inspector(self):
-        # Create synthetic docProps/core.xml and app.xml in zip stream
+        # Create synthetic docProps/core.xml, app.xml, and custom.xml in zip stream
         core_xml = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
         <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
                            xmlns:dc="http://purl.org/dc/elements/1.1/"
                            xmlns:dcterms="http://purl.org/dc/terms/">
             <dc:creator>John Auditor</dc:creator>
             <cp:lastModifiedBy>Jane Reviewer</cp:lastModifiedBy>
+            <dc:title>Audit Investigation Summary</dc:title>
+            <dc:subject>Procurement Fraud Assessment</dc:subject>
             <cp:revision>5</cp:revision>
             <dcterms:created>2026-03-01T10:00:00Z</dcterms:created>
             <dcterms:modified>2026-03-05T14:30:00Z</dcterms:modified>
@@ -62,22 +74,51 @@ class QVerifyUnitTests(TestCase):
             <Application>Microsoft Office Word</Application>
             <AppVersion>16.0000</AppVersion>
             <Company>Hyundai Corp</Company>
-            <TotalTime>120</TotalTime>
+            <TotalTime>invalid_int_failsafe</TotalTime>
+        </Properties>"""
+
+        custom_xml = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
+            <property name="Classification">RESTRICTED</property>
         </Properties>"""
 
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr("docProps/core.xml", core_xml)
             zf.writestr("docProps/app.xml", app_xml)
+            zf.writestr("docProps/custom.xml", custom_xml)
 
         zip_bytes = buf.getvalue()
         meta = OfficeInspector.inspect(zip_bytes, "audit_memo.docx")
 
         self.assertEqual(meta.meta_author, "John Auditor")
         self.assertEqual(meta.meta_last_modified_by, "Jane Reviewer")
+        self.assertEqual(meta.meta_title, "Audit Investigation Summary")
+        self.assertEqual(meta.meta_subject, "Procurement Fraud Assessment")
         self.assertEqual(meta.meta_company, "Hyundai Corp")
-        self.assertEqual(meta.editing_time_minutes, 120)
+        self.assertEqual(meta.editing_time_minutes, 0)
         self.assertEqual(meta.revision_number, "5")
+        self.assertEqual(
+            meta.raw_dict.get("custom_properties", {}).get("Classification"), "RESTRICTED"
+        )
+
+        # Corrupt archive parsing
+        corrupt_meta = OfficeInspector.inspect(b"NOT_A_VALID_ZIP_STREAM", "corrupted.docx")
+        self.assertIn("parser_error", corrupt_meta.raw_dict)
+
+        # Invalid custom.xml exception handling
+        buf_bad_custom = io.BytesIO()
+        with zipfile.ZipFile(buf_bad_custom, "w") as zf:
+            zf.writestr("docProps/custom.xml", b"<unclosed xml tag")
+        bad_custom_meta = OfficeInspector.inspect(buf_bad_custom.getvalue(), "bad_custom.docx")
+        self.assertNotIn("custom_properties", bad_custom_meta.raw_dict)
+
+        # Static date parsing methods
+        self.assertIsNone(OfficeInspector._parse_iso_date(""))
+        self.assertIsNone(OfficeInspector._parse_iso_date("invalid_iso_date"))
+        parsed_dt = OfficeInspector._parse_iso_date("2026-03-01T10:00:00")
+        self.assertIsNotNone(parsed_dt)
+        self.assertEqual(parsed_dt.tzinfo, UTC)
 
     def test_create_case_and_ingest_document_service(self):
         case = create_verification_case(
@@ -153,3 +194,243 @@ class QVerifyUnitTests(TestCase):
         search_res = self.client.get(f"{grid_url}?search=Alpha")
         self.assertEqual(search_res.status_code, 200)
         self.assertEqual(search_res.json()["total_count"], 1)
+
+    def test_pdf_inspector_valid_pdf(self):
+        writer = pypdf.PdfWriter()
+        writer.add_blank_page(width=200, height=200)
+        writer.add_metadata(
+            {
+                "/Title": "Executive Agreement",
+                "/Author": "Auditor General",
+                "/Producer": "ReportLab PDF Engine",
+                "/Creator": "Automated Billing System",
+            }
+        )
+        pdf_buf = io.BytesIO()
+        writer.write(pdf_buf)
+        pdf_bytes = pdf_buf.getvalue()
+
+        meta = PDFInspector.inspect(pdf_bytes, "agreement.pdf")
+        self.assertEqual(meta.meta_title, "Executive Agreement")
+        self.assertEqual(meta.meta_author, "Auditor General")
+        self.assertEqual(meta.meta_producer, "ReportLab PDF Engine")
+        self.assertEqual(meta.file_extension, ".pdf")
+        self.assertFalse(meta.is_encrypted)
+
+    def test_image_inspector_valid_image(self):
+        img = Image.new("RGB", (150, 150), color=(255, 0, 0))
+        img_buf = io.BytesIO()
+        img.save(img_buf, format="PNG")
+        png_bytes = img_buf.getvalue()
+
+        meta = ImageInspector.inspect(png_bytes, "invoice_scan.png")
+        self.assertEqual(meta.file_extension, ".png")
+        self.assertEqual(meta.mime_type, "image/png")
+        self.assertIn("dimensions", meta.raw_dict)
+        self.assertEqual(meta.raw_dict["dimensions"]["width"], 150)
+
+    def test_dashboard_and_case_views(self):
+        # Dashboard view
+        dash_res = self.client.get(reverse("q_verify:dashboard"))
+        self.assertEqual(dash_res.status_code, 200)
+
+        # Case create API
+        create_res = self.client.post(
+            reverse("q_verify:case_create"),
+            data={
+                "case_title": "Tender Document Audit",
+                "custodian_name": "Procurement Officer",
+                "custodian_department": "Supply Chain",
+            },
+        )
+        self.assertEqual(create_res.status_code, 200)
+        data = create_res.json()
+        self.assertTrue(data["success"])
+        case_id = data["case_id"]
+
+        # Document detail API
+        doc = VerifiedDocument.objects.create(
+            case_id=case_id,
+            filename="Test_Tender.pdf",
+            authenticity_score=92,
+            risk_level=VerifiedDocument.RiskLevel.AUTHENTIC,
+            raw_metadata={"page_count": 5},
+        )
+        doc_res = self.client.get(reverse("q_verify:document_detail", kwargs={"doc_id": doc.id}))
+        self.assertEqual(doc_res.status_code, 200)
+        self.assertEqual(doc_res.json()["filename"], "Test_Tender.pdf")
+
+    def test_pdf_date_parsing_and_normalization(self):
+        # Standard PDF date format with positive timezone offset
+        dt_pos = PDFInspector._parse_pdf_date("D:20260315143022+05'30'")
+        self.assertIsNotNone(dt_pos)
+        self.assertEqual(dt_pos.year, 2026)
+        self.assertEqual(dt_pos.month, 3)
+        self.assertEqual(dt_pos.day, 15)
+
+        # Standard PDF date format with negative timezone offset
+        dt_neg = PDFInspector._parse_pdf_date("D:20260315143022-04'00'")
+        self.assertIsNotNone(dt_neg)
+
+        # Without timezone offset
+        dt_no_tz = PDFInspector._parse_pdf_date("D:20260315143022")
+        self.assertIsNotNone(dt_no_tz)
+
+        # ISO format
+        dt_iso = PDFInspector._parse_pdf_date("2026-03-15T14:30:22Z")
+        self.assertIsNotNone(dt_iso)
+
+        # Edge cases: empty / invalid strings
+        self.assertIsNone(PDFInspector._parse_pdf_date(""))
+        self.assertIsNone(PDFInspector._parse_pdf_date("invalid_date_format"))
+
+        # Normalization
+        self.assertIsNone(PDFInspector._normalize_dt(None))
+        naive = datetime(2026, 1, 1, 12, 0)
+        norm = PDFInspector._normalize_dt(naive)
+        self.assertEqual(norm.tzinfo, UTC)
+
+    def test_image_inspector_exif_tags_and_corrupt_bytes(self):
+        # Exif date parsing
+        self.assertIsNone(ImageInspector._parse_exif_date(""))
+        self.assertIsNone(ImageInspector._parse_exif_date("invalid"))
+        parsed_dt = ImageInspector._parse_exif_date("2026:05:20 18:45:00")
+        self.assertIsNotNone(parsed_dt)
+        self.assertEqual(parsed_dt.year, 2026)
+        self.assertEqual(parsed_dt.month, 5)
+
+        # PIL image with EXIF metadata
+        img = Image.new("RGB", (100, 100), color=(0, 255, 0))
+        exif = img.getexif()
+        # 271: Make, 272: Model, 305: Software, 306: DateTime
+        exif[271] = "Canon"
+        exif[272] = "EOS R5"
+        exif[305] = "Photoshop Elements 2026"
+        exif[306] = "2026:02:15 10:30:00"
+
+        img_buf = io.BytesIO()
+        img.save(img_buf, format="JPEG", exif=exif)
+        jpeg_bytes = img_buf.getvalue()
+
+        meta = ImageInspector.inspect(jpeg_bytes, "captured_receipt.jpg")
+        self.assertEqual(meta.file_extension, ".jpg")
+        self.assertEqual(meta.mime_type, "image/jpeg")
+        self.assertIn("Photoshop", meta.meta_software)
+        self.assertIn("Canon", meta.meta_creator)
+        self.assertIsNotNone(meta.meta_modified_at)
+
+        # Corrupt image bytes
+        meta_corrupt = ImageInspector.inspect(b"this_is_not_an_image", "damaged.jpg")
+        self.assertIn("parser_error", meta_corrupt.raw_dict)
+
+    def test_upload_documents_api_view(self):
+        case = VerificationCase.objects.create(
+            case_ref="VER-UPLOAD-001",
+            case_title="Batch Document Inspection Case",
+            custodian_name="Dr. Banner",
+        )
+        url = reverse("q_verify:case_upload", kwargs={"case_id": case.id})
+
+        # Test empty upload payload
+        res_empty = self.client.post(url, data={})
+        self.assertEqual(res_empty.status_code, 400)
+
+        # Test valid multiple file upload
+        f1 = SimpleUploadedFile("doc1.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf")
+        f2 = SimpleUploadedFile("doc2.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf")
+        res_valid = self.client.post(url, data={"files": [f1, f2]})
+        self.assertEqual(res_valid.status_code, 200)
+        data = res_valid.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["processed_count"], 2)
+
+    def test_download_document_view(self):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(b"%PDF-1.4 physical test content\n%%EOF")
+            tmp_path = tmp.name
+
+        doc = VerifiedDocument.objects.create(
+            filename="physical_contract.pdf",
+            authenticity_score=90,
+            risk_level=VerifiedDocument.RiskLevel.AUTHENTIC,
+            storage_path=tmp_path,
+        )
+
+        dl_url = reverse("q_verify:document_download", kwargs={"doc_id": doc.id})
+        res = self.client.get(dl_url)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("attachment", res["Content-Disposition"])
+        res.close()
+
+        # Test 404 when file does not exist on disk
+        doc.storage_path = "/non/existent/path/document.pdf"
+        doc.save()
+        res_404 = self.client.get(dl_url)
+        self.assertEqual(res_404.status_code, 404)
+
+        # Clean up temp file
+        Path(tmp_path).unlink(missing_ok=True)
+
+    def test_discrepancy_analyzer_software_and_future_date(self):
+        # Software anomaly
+        meta_sw = ParsedMetadata(
+            filename="edited_invoice.pdf",
+            file_size_bytes=2048,
+            mime_type="application/pdf",
+            file_extension=".pdf",
+            sha256_hash="abc",
+            meta_software="Adobe Photoshop CC 2026",
+        )
+        res_sw = DiscrepancyAnalyzer.analyze(meta_sw)
+        self.assertTrue(res_sw.has_software_anomaly)
+
+        # Future creation date anomaly
+        now = datetime.now(UTC)
+        meta_future = ParsedMetadata(
+            filename="future_invoice.pdf",
+            file_size_bytes=2048,
+            mime_type="application/pdf",
+            file_extension=".pdf",
+            sha256_hash="xyz",
+            meta_created_at=now + timedelta(days=365),
+            meta_modified_at=now + timedelta(days=365),
+        )
+        res_future = DiscrepancyAnalyzer.analyze(meta_future)
+        self.assertTrue(res_future.has_timestamp_anomaly)
+
+    def test_discrepancy_analyzer_extended_gap_and_zero_edit_time(self):
+        now = datetime.now(UTC)
+
+        # 1. Extended revision gap (>180 days) and FS vs Meta discrepancy (>365 days)
+        meta_gap = ParsedMetadata(
+            filename="gap_doc.docx",
+            file_size_bytes=4096,
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            file_extension=".docx",
+            sha256_hash="11223344",
+            file_created_at=now,
+            meta_created_at=now - timedelta(days=400),
+            meta_modified_at=now - timedelta(days=100),
+            editing_time_minutes=0,
+            revision_number="6",
+        )
+        res_gap = DiscrepancyAnalyzer.analyze(meta_gap)
+        flag_codes = [f.code for f in res_gap.anomalies]
+        self.assertIn("EXTENDED_TIME_GAP", flag_codes)
+        self.assertIn("FS_META_DISCREPANCY", flag_codes)
+        self.assertIn("OFFICE_ZERO_EDIT_TIME", flag_codes)
+
+        # 2. Stripped metadata
+        meta_stripped = ParsedMetadata(
+            filename="stripped.pdf",
+            file_size_bytes=1024,
+            mime_type="application/pdf",
+            file_extension=".pdf",
+            sha256_hash="55667788",
+            meta_created_at=None,
+            meta_author="",
+            meta_software="",
+        )
+        res_stripped = DiscrepancyAnalyzer.analyze(meta_stripped)
+        stripped_codes = [f.code for f in res_stripped.anomalies]
+        self.assertIn("METADATA_STRIPPED", stripped_codes)

@@ -203,3 +203,6 @@ VOICE_MODEL_ENDPOINT = os.environ.get(
     "VOICE_MODEL_ENDPOINT", "http://127.0.0.1:8434/v1/audio/transcriptions"
 )
 VOICE_API_TIMEOUT = float(os.environ.get("VOICE_API_TIMEOUT", "60.0"))
+
+# Test Discovery Runner (eliminates apps. prefix import collisions)
+TEST_RUNNER = "core.runner.ForensicTestRunner"

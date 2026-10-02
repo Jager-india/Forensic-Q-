@@ -1,15 +1,26 @@
 import csv
+import io
+import json
+import os
 import tempfile
+import uuid
 import zipfile
 from pathlib import Path
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from .backend.disk_scanner import HighPerformanceDiskScanner, load_or_create_config
 from .models import FileEvidenceHit, ScannedDevice
 from .selectors import (
+    format_file_size,
+    get_all_scanned_devices,
+    get_evidence_hits_query,
+    get_paginated_evidence_hits,
     get_scan_dashboard_metrics,
+    get_scanned_device_by_id,
+    get_top_matched_keywords,
 )
 from .services import delete_scanned_device, ingest_scan_csv_file
 
@@ -149,6 +160,178 @@ class HighPerformanceDiskScannerTests(TestCase):
         self.assertIn("keywords", created_cfg)
         self.assertIn("exclude_directories", created_cfg)
 
+        # Existing valid config
+        loaded_cfg = load_or_create_config(cfg_path)
+        self.assertEqual(loaded_cfg["keywords"], created_cfg["keywords"])
+
+        # Corrupted config raises error
+        corrupt_cfg = self.root_path / "corrupt_config.json"
+        corrupt_cfg.write_text("{not valid json", encoding="utf-8")
+        with self.assertRaises(json.JSONDecodeError):
+            load_or_create_config(corrupt_cfg)
+
+    def test_format_long_path_and_clean_display_path(self):
+        # Long path formatting
+        p_normal = "C:\\audit\\reports\\memo.docx"
+        p_long = HighPerformanceDiskScanner.format_long_path(p_normal)
+        self.assertTrue(p_long.startswith("\\\\?\\") or os.name != "nt")
+
+        # Path that already has prefix
+        p_already_long = "\\\\?\\C:\\audit\\reports\\memo.docx"
+        self.assertEqual(
+            HighPerformanceDiskScanner.format_long_path(p_already_long), p_already_long
+        )
+
+        # UNC path
+        p_unc = "\\\\fileserver\\share\\memo.docx"
+        p_unc_formatted = HighPerformanceDiskScanner.format_long_path(p_unc)
+        if os.name == "nt":
+            self.assertTrue(p_unc_formatted.startswith("\\\\?\\UNC\\"))
+
+        # Clean display path
+        self.assertEqual(
+            HighPerformanceDiskScanner.clean_display_path("\\\\?\\C:\\audit\\memo.docx"),
+            "C:\\audit\\memo.docx",
+        )
+        self.assertEqual(
+            HighPerformanceDiskScanner.clean_display_path("\\\\?\\UNC\\fileserver\\share\\doc.pdf"),
+            "\\\\fileserver\\share\\doc.pdf",
+        )
+        self.assertEqual(
+            HighPerformanceDiskScanner.clean_display_path("C:\\plain\\path.txt"),
+            "C:\\plain\\path.txt",
+        )
+
+    def test_is_directory_excluded_variations(self):
+        target_root = str(self.root_path)
+        scanner = HighPerformanceDiskScanner(
+            target_directories=[target_root],
+            keywords=["secret"],
+            exclude_directories=["C:\\excluded_dir", "sub_exclude"],
+        )
+
+        # Target root should not be excluded
+        self.assertFalse(scanner.is_directory_excluded(target_root))
+
+        # Configured exclusion matches
+        self.assertTrue(scanner.is_directory_excluded("C:\\excluded_dir"))
+        self.assertTrue(scanner.is_directory_excluded("C:\\excluded_dir\\nested"))
+        self.assertTrue(scanner.is_directory_excluded(str(self.root_path / "sub_exclude" / "data")))
+
+        # Normal non-excluded folder
+        self.assertFalse(scanner.is_directory_excluded(str(self.root_path / "normal_data")))
+
+    def test_format_file_size(self):
+        self.assertEqual(HighPerformanceDiskScanner.format_file_size(500), "500.00 B")
+        self.assertEqual(HighPerformanceDiskScanner.format_file_size(2048), "2.00 KB")
+        self.assertEqual(HighPerformanceDiskScanner.format_file_size(5 * 1024 * 1024), "5.00 MB")
+        self.assertEqual(
+            HighPerformanceDiskScanner.format_file_size(3 * 1024 * 1024 * 1024), "3.00 GB"
+        )
+        self.assertEqual(
+            HighPerformanceDiskScanner.format_file_size(2 * 1024 * 1024 * 1024 * 1024), "2.00 TB"
+        )
+        self.assertIn(
+            "PB", HighPerformanceDiskScanner.format_file_size(2000 * 1024 * 1024 * 1024 * 1024)
+        )
+
+    def test_deep_xlsx_and_pptx_inspection(self):
+        # Create mock .xlsx
+        xlsx_file = self.root_path / "accounts.xlsx"
+        mock_shared_strings = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+            <si><t>Offshore shell payment illicit remittance</t></si>
+        </sst>"""
+        with zipfile.ZipFile(xlsx_file, "w") as z:
+            z.writestr("xl/sharedStrings.xml", mock_shared_strings)
+
+        # Create mock .pptx
+        pptx_file = self.root_path / "pitch.pptx"
+        mock_slide = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>Executive illicit bonus pool</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>
+        </p:sld>"""
+        with zipfile.ZipFile(pptx_file, "w") as z:
+            z.writestr("ppt/slides/slide1.xml", mock_slide)
+
+        scanner = HighPerformanceDiskScanner(
+            target_directories=[str(self.root_path)],
+            keywords=["illicit"],
+            search_contents=True,
+            output_csv_path=self.output_csv,
+        )
+        stats = scanner.run_scan()
+
+        self.assertEqual(stats["matches_found"], 2)
+        with open(self.output_csv, encoding="utf-8-sig") as f:
+            content = f.read()
+            self.assertIn("CONTENT_XLSX", content)
+            self.assertIn("CONTENT_PPTX", content)
+
+    def test_nested_zip_office_document_and_corrupt_archive(self):
+        # Nested zip with inner docx and a directory entry
+        inner_docx_buf = io.BytesIO()
+        with zipfile.ZipFile(inner_docx_buf, "w") as inner_z:
+            inner_z.writestr(
+                "word/document.xml",
+                b"<w:document><w:body><w:p><w:r><w:t>Confidential slush fund transfer</w:t></w:r></w:p></w:body></w:document>",
+            )
+
+        outer_zip = self.root_path / "complex_archive.zip"
+        with zipfile.ZipFile(outer_zip, "w") as outer_z:
+            # 1. Directory entry inside zip
+            outer_z.writestr("folder/", "")
+            # 2. Nested docx file
+            outer_z.writestr("folder/inner_contract.docx", inner_docx_buf.getvalue())
+            # 3. Text member matching keyword
+            outer_z.writestr("folder/notes.txt", "Another slush fund entry in plain text")
+
+        # Corrupt archive
+        corrupt_zip = self.root_path / "broken_archive.zip"
+        corrupt_zip.write_bytes(b"NOT_A_VALID_ZIP_HEADER_DATA_12345")
+
+        scanner = HighPerformanceDiskScanner(
+            target_directories=[str(self.root_path)],
+            keywords=["slush fund"],
+            search_contents=True,
+            output_csv_path=self.output_csv,
+        )
+        stats = scanner.run_scan()
+
+        self.assertGreaterEqual(stats["matches_found"], 1)
+        self.assertGreaterEqual(stats["errors_bypassed"], 1)
+        with open(self.output_csv, encoding="utf-8-sig") as f:
+            content = f.read()
+            self.assertIn("CONTENT_ZIP_OFFICE", content)
+
+    def test_scan_with_progress_callback_and_interruption(self):
+        # Create nested folders and files
+        sub_dir = self.root_path / "level1" / "level2"
+        sub_dir.mkdir(parents=True)
+        (sub_dir / "target.txt").write_text("classified audit document", encoding="utf-8")
+
+        callbacks_received = []
+
+        def on_progress(p: dict):
+            callbacks_received.append(p)
+
+        scanner = HighPerformanceDiskScanner(
+            target_directories=[str(self.root_path)],
+            keywords=["classified"],
+            exclude_directories=[],
+            progress_callback=on_progress,
+            output_csv_path=self.output_csv,
+        )
+        stats = scanner.run_scan()
+        self.assertGreaterEqual(stats["matches_found"], 1)
+        self.assertGreaterEqual(stats["dirs_scanned"], 2)
+
+        # Test interruption flag
+        scanner.is_interrupted = True
+        stats_interrupted = scanner.run_scan()
+        self.assertIsNotNone(stats_interrupted)
+
 
 class QScanDjangoServiceAndViewsTests(TestCase):
     """
@@ -218,3 +401,162 @@ class QScanDjangoServiceAndViewsTests(TestCase):
         delete_scanned_device(device.id)
         self.assertEqual(ScannedDevice.objects.count(), 0)
         self.assertEqual(FileEvidenceHit.objects.count(), 0)
+
+    def test_format_file_size(self):
+        self.assertEqual(format_file_size(500), "500.00 B")
+        self.assertEqual(format_file_size(2048), "2.00 KB")
+        self.assertEqual(format_file_size(10485760), "10.00 MB")
+        self.assertEqual(format_file_size(10737418240), "10.00 GB")
+
+    def test_selectors_and_pagination(self):
+        device = ScannedDevice.objects.create(
+            hostname="WS-SELECT-01",
+            scan_title="Selector Verification",
+        )
+        h1 = FileEvidenceHit.objects.create(
+            device=device,
+            file_path="C:\\Evidence\\kickbacks.xlsx",
+            filename="kickbacks.xlsx",
+            matched_keyword="kickback",
+            match_type=FileEvidenceHit.MatchType.CONTENT_DOCX,
+            risk_score=85,
+        )
+        FileEvidenceHit.objects.create(
+            device=device,
+            file_path="C:\\Evidence\\salary_sheet.csv",
+            filename="salary_sheet.csv",
+            matched_keyword="salary",
+            match_type=FileEvidenceHit.MatchType.CONTENT_TEXT,
+            risk_score=30,
+        )
+
+        all_devs = get_all_scanned_devices()
+        self.assertGreaterEqual(all_devs.count(), 1)
+
+        fetched = get_scanned_device_by_id(device.id)
+        self.assertEqual(fetched.id, device.id)
+        self.assertIsNone(get_scanned_device_by_id("invalid-id"))
+
+        # Query hits with filters
+        hits = get_evidence_hits_query(device_id=device.id, keyword="kickback")
+        self.assertEqual(hits.count(), 1)
+
+        # Pagination & sorting
+        page_res = get_paginated_evidence_hits(
+            device_id=device.id,
+            page=1,
+            page_size=10,
+            search="kickbacks",
+            risk_level="high",
+            sort_field="risk_score",
+            sort_dir="desc",
+        )
+        self.assertEqual(page_res["total_count"], 1)
+        self.assertEqual(page_res["data"][0]["id"], str(h1.id))
+
+        # Top keywords
+        top_kws = get_top_matched_keywords()
+        self.assertGreaterEqual(len(top_kws), 1)
+
+    def test_evidence_api_and_review_toggle(self):
+        device = ScannedDevice.objects.create(
+            hostname="WS-API-01",
+            scan_title="API Verification",
+        )
+        hit = FileEvidenceHit.objects.create(
+            device=device,
+            file_path="C:\\secret.txt",
+            filename="secret.txt",
+            matched_keyword="password",
+            match_type=FileEvidenceHit.MatchType.FILENAME,
+            risk_score=95,
+            is_reviewed=False,
+        )
+
+        # Tabulator Evidence API endpoint
+        api_url = reverse("q_scan:hits_api")
+        resp = self.client.get(api_url, {"device_id": str(device.id)})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["last_row"], 1)
+
+        # Toggle review status
+        toggle_url = reverse("q_scan:review_hit_api", kwargs={"hit_id": hit.id})
+        toggle_resp = self.client.post(
+            toggle_url,
+            data=json.dumps({"is_reviewed": True, "reviewer_notes": "Reviewed"}),
+            content_type="application/json",
+        )
+        self.assertEqual(toggle_resp.status_code, 200)
+        hit.refresh_from_db()
+        self.assertTrue(hit.is_reviewed)
+
+    def test_download_tool_file_view(self):
+        # Valid tool file download
+        res = self.client.get(reverse("q_scan:download_tool", kwargs={"filename": "q_scan.py"}))
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("attachment", res["Content-Disposition"])
+        res.close()
+
+        # Invalid tool file download -> 404
+        res_404 = self.client.get(
+            reverse("q_scan:download_tool", kwargs={"filename": "non_existent.py"})
+        )
+        self.assertEqual(res_404.status_code, 404)
+
+    def test_device_views_workflow(self):
+        # 1. Upload CSV endpoint with file
+        csv_data = (
+            b"Timestamp,Hostname,MatchedKeyword,MatchType,FilePath,RiskScore,Snippet\n"
+            b"2026-03-01 10:00:00,WS-AUTO-01,secret,FILENAME,C:\\secret.txt,90,secret file\n"
+        )
+        upload_file = SimpleUploadedFile("scan_results.csv", csv_data, content_type="text/csv")
+
+        upload_url = reverse("q_scan:upload_csv")
+        res_up = self.client.post(
+            upload_url,
+            data={
+                "csv_file": upload_file,
+                "hostname": "WS-AUTO-01",
+                "scan_title": "Field Audit",
+                "custodian_name": "Audit Custodian",
+                "drive_letter": "C",
+            },
+        )
+        self.assertEqual(res_up.status_code, 302)
+        dev = ScannedDevice.objects.filter(hostname="WS-AUTO-01").first()
+        self.assertIsNotNone(dev)
+
+        # 2. Upload CSV endpoint without file
+        res_empty = self.client.post(upload_url, data={})
+        self.assertEqual(res_empty.status_code, 302)
+
+        # 3. Device detail view
+        detail_url = reverse("q_scan:device_detail", kwargs={"device_id": dev.id})
+        res_det = self.client.get(detail_url)
+        self.assertEqual(res_det.status_code, 200)
+        self.assertIn(b"WS-AUTO-01", res_det.content)
+
+        # 4. Device detail view 404
+        res_det_404 = self.client.get(
+            reverse("q_scan:device_detail", kwargs={"device_id": uuid.uuid4()})
+        )
+        self.assertEqual(res_det_404.status_code, 404)
+
+        # 5. Export hits CSV view
+        exp_url = f"{reverse('q_scan:export_csv')}?device_id={dev.id}"
+        res_exp = self.client.get(exp_url)
+        self.assertEqual(res_exp.status_code, 200)
+        self.assertIn("text/csv", res_exp["Content-Type"])
+
+        # 6. Delete device view
+        del_url = reverse("q_scan:delete_device", kwargs={"device_id": dev.id})
+        res_del = self.client.post(del_url)
+        self.assertEqual(res_del.status_code, 302)
+        self.assertFalse(ScannedDevice.objects.filter(id=dev.id).exists())
+
+        # 7. Delete non-existent device
+        res_del_404 = self.client.post(
+            reverse("q_scan:delete_device", kwargs={"device_id": uuid.uuid4()})
+        )
+        self.assertEqual(res_del_404.status_code, 302)

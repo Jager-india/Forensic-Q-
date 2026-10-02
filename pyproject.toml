@@ -27,6 +27,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "bandit>=1.9.4",
+    "coverage>=7.16.1",
     "django-debug-toolbar>=8.0.0",
     "django-upgrade>=1.32.0",
     "djlint>=1.46.2",
@@ -69,3 +70,32 @@ indent-style = "space"
 [tool.bandit]
 exclude_dirs = [".venv", "staticfiles", "node_modules", "tests"]
 skips = ["B101"]
+
+[tool.coverage.run]
+source = ["apps", "core"]
+omit = [
+    "*/migrations/*",
+    "*/tests.py",
+    "*/tests/*",
+    "core/runner.py",
+    "manage.py",
+    "ForensiQ/wsgi.py",
+    "ForensiQ/asgi.py",
+]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 1
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

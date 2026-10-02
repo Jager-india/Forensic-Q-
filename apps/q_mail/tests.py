@@ -1,5 +1,6 @@
 import hashlib
 import json
+import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,7 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from .models import MailboxInvestigation
+from .models import EmailAttachment, MailboxInvestigation
 
 
 class QMailUploadAndIngestionTests(TestCase):
@@ -164,7 +165,8 @@ class QMailUploadAndIngestionTests(TestCase):
         self.assertIn("interrupted", stalled_inv.error_message)
         self.assertEqual(active_inv.status, MailboxInvestigation.IngestionStatus.PROCESSING)
 
-    def test_restart_resumes_stalled_investigation(self):
+    @patch("q_mail.services.threading.Thread")
+    def test_restart_resumes_stalled_investigation(self, mock_thread):
         inv = MailboxInvestigation.objects.create(
             audit_ref="AUD-RESUME-001",
             audit_name="Resume Test",
@@ -179,8 +181,317 @@ class QMailUploadAndIngestionTests(TestCase):
         process_url = reverse("q_mail:trigger_process", kwargs={"mailbox_id": inv.id})
         res = self.client.post(process_url)
         self.assertEqual(res.status_code, 200)
+        mock_thread.assert_called_once()
 
         inv.refresh_from_db()
         self.assertEqual(inv.status, MailboxInvestigation.IngestionStatus.PROCESSING)
         self.assertFalse(inv.is_cancellation_requested)
         self.assertEqual(inv.error_message, "")
+
+
+class QMailCheckpointsAndSelectorsTests(TestCase):
+    def setUp(self):
+        from .backend.checkpoints import (
+            check_currency,
+            check_no_cc_bcc,
+            check_non_hmil,
+            check_personal_sender,
+            check_primary_bank,
+            check_upi_payment,
+            evaluate_email_checkpoints,
+            match_default_keywords,
+        )
+
+        self.check_currency = check_currency
+        self.check_no_cc_bcc = check_no_cc_bcc
+        self.check_non_hmil = check_non_hmil
+        self.check_personal_sender = check_personal_sender
+        self.check_primary_bank = check_primary_bank
+        self.check_upi_payment = check_upi_payment
+        self.evaluate_email_checkpoints = evaluate_email_checkpoints
+        self.match_default_keywords = match_default_keywords
+
+        self.inv = MailboxInvestigation.objects.create(
+            audit_ref="AUD-CHK-001",
+            audit_name="Checkpoint Audit",
+            auditee_name="Checkpoint User",
+            auditee_email="chk@enterprise.internal",
+            status=MailboxInvestigation.IngestionStatus.COMPLETED,
+        )
+
+    def test_checkpoint_rules(self):
+        self.assertTrue(self.check_currency("Please wire ₹ 5,00,000 for invoice payment"))
+        self.assertTrue(self.check_currency("Total sum of 45 Lakhs INR"))
+        self.assertFalse(self.check_currency("Standard meeting scheduled at 3pm"))
+
+        self.assertTrue(self.check_no_cc_bcc([], []))
+        self.assertFalse(self.check_no_cc_bcc(["boss@corp.com"], []))
+
+        self.assertTrue(self.check_personal_sender("vendor@gmail.com"))
+        self.assertFalse(self.check_personal_sender("employee@hyundai.com"))
+
+        self.assertTrue(self.check_non_hmil("vendor@external.com", ["user@external.com"]))
+        self.assertFalse(self.check_non_hmil("user@hmil.net", ["boss@hmil.net"]))
+
+        self.assertTrue(self.check_primary_bank("alerts@hdfcbank.net", "Account credited", ""))
+        self.assertTrue(self.check_upi_payment("pay@phonepe.com", "UPI payment received", ""))
+
+        kws = self.match_default_keywords("Here is the TAX invoice and SALARY bonus document")
+        self.assertIn("TAX", kws)
+        self.assertIn("SALARY", kws)
+
+    def test_mailbox_selectors_and_pagination(self):
+        from .models import EmailMessage
+        from .selectors import (
+            get_mailbox_investigation,
+            get_mailbox_progress_state,
+            get_paginated_investigation_emails,
+            list_mailbox_investigations,
+        )
+
+        email = EmailMessage.objects.create(
+            mailbox=self.inv,
+            subject="Confidential settlement of ₹ 10 Lakhs",
+            sender_name="Secret Vendor",
+            sender_email="secret@gmail.com",
+            recipients_to=["chk@enterprise.internal"],
+            recipients_cc=[],
+            recipients_bcc=[],
+            body_plain="Please find attached payment receipt for the wire transfer",
+            risk_score=85,
+        )
+
+        eval_res = self.evaluate_email_checkpoints(email)
+        self.assertTrue(eval_res["is_currency"])
+        self.assertTrue(eval_res["is_no_cc_bcc"])
+        self.assertTrue(eval_res["is_personal_sender"])
+
+        # Check selectors
+        inv_list = list_mailbox_investigations()
+        self.assertGreaterEqual(inv_list.count(), 1)
+
+        fetched = get_mailbox_investigation(self.inv.id)
+        self.assertEqual(fetched.id, self.inv.id)
+
+        prog = get_mailbox_progress_state(self.inv.id)
+        self.assertEqual(prog["status"], MailboxInvestigation.IngestionStatus.COMPLETED)
+
+        # Paginated emails
+        page_res = get_paginated_investigation_emails(
+            self.inv.id, page=1, page_size=10, checkpoint="currency"
+        )
+        self.assertEqual(page_res["total_count"], 1)
+
+        # Excel export view
+        client = Client()
+        session = client.session
+        session["portal_authenticated"] = True
+        session.save()
+        export_resp = client.get(
+            reverse("q_mail:export_checkpoint_excel", kwargs={"mailbox_id": self.inv.id})
+        )
+        self.assertEqual(export_resp.status_code, 200)
+
+    @patch("pypff.file")
+    def test_pst_stream_parser_complete(self, mock_pypff_file):
+        from datetime import UTC, datetime
+        from pathlib import Path
+        from unittest.mock import MagicMock
+
+        from .backend.pst_parser import PSTStreamParser
+
+        # Setup mock PST structure
+        mock_instance = mock_pypff_file.return_value
+        root_folder = MagicMock()
+        root_folder.get_name.return_value = "Top of Personal Folders"
+        root_folder.get_number_of_sub_messages.return_value = 1
+        root_folder.get_number_of_sub_folders.return_value = 1
+
+        # Mock Message
+        mock_msg = MagicMock()
+        mock_msg.get_subject.return_value = "Wire Payment of INR 500000"
+        mock_msg.get_sender_name.return_value = "Auditee Manager"
+        mock_msg.get_sender_email_address.return_value = "manager@enterprise.internal"
+        mock_msg.get_conversation_topic.return_value = "Settlement"
+        mock_msg.get_client_submit_time.return_value = datetime.now(UTC)
+        mock_msg.get_delivery_time.return_value = datetime.now(UTC)
+        mock_msg.get_plain_text_body.return_value = b"Please approve the transfer"
+        mock_msg.get_html_body.return_value = b"<p>Please approve the transfer</p>"
+        mock_msg.get_importance.return_value = 2
+        mock_msg.get_number_of_recipients.return_value = 3
+
+        r1 = MagicMock()
+        r1.get_name.return_value = "Target Auditor"
+        r1.get_email_address.return_value = "auditor@enterprise.internal"
+        r1.type = 1
+
+        r2 = MagicMock()
+        r2.get_name.return_value = "CC Contact"
+        r2.get_email_address.return_value = "cc@enterprise.internal"
+        r2.type = 2
+
+        r3 = MagicMock()
+        r3.get_name.return_value = "BCC Contact"
+        r3.get_email_address.return_value = "bcc@enterprise.internal"
+        r3.type = 3
+
+        mock_msg.get_recipient.side_effect = [r1, r2, r3]
+
+        # Attachment
+        mock_msg.get_number_of_attachments.return_value = 1
+        att = MagicMock()
+        att.get_name.return_value = "statement.pdf"
+        att.get_size.return_value = 24
+        att.read_buffer.side_effect = [b"ATTACHMENT_BINARY_PAYLOAD", None]
+        mock_msg.get_attachment.return_value = att
+
+        root_folder.get_sub_message.return_value = mock_msg
+
+        # Subfolder
+        sub_folder = MagicMock()
+        sub_folder.get_name.return_value = "Inbox"
+        sub_folder.get_number_of_sub_messages.return_value = 0
+        sub_folder.get_number_of_sub_folders.return_value = 0
+        root_folder.get_sub_folder.return_value = sub_folder
+
+        mock_instance.get_root_folder.return_value = root_folder
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pst_file = Path(tmp_dir) / "evidence.pst"
+            pst_file.write_bytes(b"DUMMY_PST_BYTES")
+            att_dir = Path(tmp_dir) / "attachments"
+
+            progress_calls = []
+
+            def on_progress(folder, processed, total):
+                progress_calls.append((folder, processed, total))
+
+            parser = PSTStreamParser(
+                pst_file,
+                attachments_dir=att_dir,
+                progress_callback=on_progress,
+                check_cancellation_callback=lambda: False,
+            )
+            messages = list(parser.parse_messages())
+            self.assertEqual(len(messages), 1)
+            self.assertEqual(messages[0].subject, "Wire Payment of INR 500000")
+            self.assertEqual(len(messages[0].attachments), 1)
+            self.assertEqual(messages[0].attachments[0].filename, "statement.pdf")
+
+    def test_execute_pst_ingestion_and_selectors(self):
+        from datetime import UTC, datetime
+        from unittest.mock import MagicMock, patch
+
+        from .backend.pst_parser import ParsedAttachment, ParsedEmail
+        from .selectors import (
+            get_email_detail,
+            get_investigation_emails,
+            get_investigation_summary_metrics,
+            get_top_counterparties,
+        )
+        from .services import _execute_pst_ingestion
+
+        tmp_pst = tempfile.NamedTemporaryFile(suffix=".pst", delete=False)
+        tmp_pst.write(b"DUMMY_BINARY_PST_DATA")
+        tmp_pst.close()
+
+        inv = MailboxInvestigation.objects.create(
+            audit_ref="AUD-EXEC-001",
+            audit_name="PST Execution Test",
+            auditee_name="Execution Auditee",
+            auditee_email="exec@enterprise.internal",
+            pst_file_path=tmp_pst.name,
+            status=MailboxInvestigation.IngestionStatus.PROCESSING,
+        )
+
+        mock_email = ParsedEmail(
+            message_id="<test1@pst.audit>",
+            subject="Tax and Payment Transfer of 15 Lakhs",
+            sender_name="Vendor Lead",
+            sender_email="vendor@gmail.com",
+            recipients_to=["exec@enterprise.internal"],
+            recipients_cc=[],
+            recipients_bcc=[],
+            sent_date=datetime.now(UTC),
+            delivery_date=datetime.now(UTC),
+            folder_path="Inbox",
+            body_plain="Please find the cash payment attached",
+            importance=2,
+            attachments=[
+                ParsedAttachment(
+                    filename="contract.pdf",
+                    file_size_bytes=1024,
+                    mime_type="application/pdf",
+                    file_extension=".pdf",
+                    sha256_hash="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    storage_path="",
+                )
+            ],
+        )
+
+        with patch("q_mail.services.PSTStreamParser") as mock_parser_cls:
+            mock_parser_instance = MagicMock()
+            mock_parser_instance.parse_messages.return_value = [mock_email]
+            mock_parser_instance.total_messages_processed = 1
+            mock_parser_instance.is_cancelled = False
+            mock_parser_cls.return_value = mock_parser_instance
+
+            _execute_pst_ingestion(str(inv.id))
+
+        inv.refresh_from_db()
+        self.assertEqual(inv.processed_messages_count, 1)
+        self.assertEqual(inv.messages.count(), 1)
+
+        # Test selectors with ingested message
+        saved_msg = inv.messages.first()
+        self.assertIsNotNone(saved_msg)
+
+        detail = get_email_detail(saved_msg.id)
+        self.assertEqual(detail.id, saved_msg.id)
+
+        metrics = get_investigation_summary_metrics(inv.id)
+        self.assertEqual(metrics["total_emails"], 1)
+
+        counterparties = get_top_counterparties(inv.id)
+        self.assertGreaterEqual(len(counterparties), 1)
+
+        emails = get_investigation_emails(inv.id, sender="vendor@gmail.com")
+        self.assertEqual(emails.count(), 1)
+
+        # Authenticate client session
+        session = self.client.session
+        session["portal_authenticated"] = True
+        session.save()
+
+        # Test investigation detail view with Plotly counterparty chart
+        res_detail = self.client.get(reverse("q_mail:detail", args=[inv.id]))
+        self.assertEqual(res_detail.status_code, 200)
+
+        # Test email detail API
+        res_email = self.client.get(reverse("q_mail:email_detail", args=[saved_msg.id]))
+        self.assertEqual(res_email.status_code, 200)
+        self.assertEqual(res_email.json()["id"], str(saved_msg.id))
+
+        # Test attachment download view
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(b"%PDF-1.4 attachment evidence")
+            tmp_path = tmp.name
+
+        attachment = EmailAttachment.objects.create(
+            email=saved_msg,
+            filename="evidence.pdf",
+            storage_path=tmp_path,
+        )
+        dl_url = reverse("q_mail:download_attachment", args=[attachment.id])
+        res_dl = self.client.get(dl_url)
+        self.assertEqual(res_dl.status_code, 200)
+        self.assertIn("attachment", res_dl["Content-Disposition"])
+        res_dl.close()
+
+        # Attachment download 404
+        attachment.storage_path = "/non/existent/evidence.pdf"
+        attachment.save()
+        res_dl_404 = self.client.get(dl_url)
+        self.assertEqual(res_dl_404.status_code, 404)
+
+        Path(tmp_path).unlink(missing_ok=True)

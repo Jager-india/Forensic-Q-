@@ -49,6 +49,7 @@ class AudioRecording(ForensicBaseModel):
     flagged_segments_count = models.IntegerField(default=0)
     risk_score = models.IntegerField(default=0, db_index=True)
     detected_intent_summary = models.CharField(max_length=255, blank=True, default="")
+    error_message = models.TextField(blank=True, default="")
     notes = models.TextField(blank=True, default="")
 
     class Meta:

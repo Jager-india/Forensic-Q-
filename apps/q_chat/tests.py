@@ -1,10 +1,15 @@
-"""
-Unit & Integration Tests for Q-Chat Corporate Messaging Forensics Engine
-"""
+import json
+import uuid
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
+from .backend.chat_parser import (
+    parse_csv_export,
+    parse_json_export,
+    parse_whatsapp_export,
+)
 from .selectors import (
     get_chat_channel_by_id,
     get_chat_dashboard_metrics,
@@ -95,3 +100,86 @@ class QChatForensicTests(TestCase):
         r_del = self.client.post(reverse("q_chat:delete_channel", args=[self.channel.id]))
         self.assertEqual(r_del.status_code, 302)
         self.assertIsNone(get_chat_channel_by_id(self.channel.id))
+
+    def test_upload_chat_view_and_errors(self):
+        session = self.client.session
+        session["portal_authenticated"] = True
+        session.save()
+
+        # 1. POST without file
+        res_empty = self.client.post(reverse("q_chat:upload"), data={})
+        self.assertEqual(res_empty.status_code, 302)
+
+        # 2. POST with valid chat file
+        chat_content = (
+            b"25/04/2024, 11:00 - Manager: Please review the PO.\n"
+            b"25/04/2024, 11:05 - Supplier: Approved, sending revised invoice.\n"
+        )
+        upload_file = SimpleUploadedFile("chat.txt", chat_content, content_type="text/plain")
+        res_ok = self.client.post(
+            reverse("q_chat:upload"),
+            data={
+                "chat_file": upload_file,
+                "platform": "WHATSAPP",
+                "channel_name": "PO Review",
+                "custodian_name": "Manager",
+            },
+        )
+        self.assertEqual(res_ok.status_code, 302)
+
+        # 3. Channel Detail 404
+        res_404 = self.client.get(reverse("q_chat:channel_detail", args=[uuid.uuid4()]))
+        self.assertEqual(res_404.status_code, 404)
+
+        # 4. Delete non-existent channel
+        res_del_err = self.client.post(reverse("q_chat:delete_channel", args=[uuid.uuid4()]))
+        self.assertEqual(res_del_err.status_code, 302)
+
+    def test_chat_parser_extended_formats(self):
+        # 1. parse_csv_export
+        csv_sample = (
+            "sender,message,date,has_media,media_type,filename,is_deleted,is_edited\n"
+            "Alice,Here is the confidential invoice,2026-03-01T10:00:00,true,DOCUMENT,invoice.pdf,false,false\n"
+            "Bob,Deleting my response now,invalid_date,false,NONE,,true,true\n"
+        )
+        csv_msgs = parse_csv_export(csv_sample)
+        self.assertEqual(len(csv_msgs), 2)
+        self.assertEqual(csv_msgs[0]["sender_name"], "Alice")
+        self.assertTrue(csv_msgs[0]["has_media"])
+        self.assertEqual(csv_msgs[0]["media_type"], "DOCUMENT")
+        self.assertEqual(csv_msgs[0]["media_filename"], "invoice.pdf")
+        self.assertTrue(csv_msgs[1]["is_deleted"])
+        self.assertTrue(csv_msgs[1]["is_edited"])
+
+        # 2. parse_whatsapp_txt with document, audio, and multi-line continuation
+        wa_sample = (
+            "20/05/2024, 09:00 - Sunil: Contract draft (file attached) settlement_v1.docx\n"
+            "20/05/2024, 09:05 - David: audio omitted\n"
+            "20/05/2024, 09:10 - Sunil: First line of proposal.\n"
+            "Second line continuation of the proposal with kickback details.\n"
+        )
+        wa_msgs = parse_whatsapp_export(wa_sample)
+        self.assertEqual(len(wa_msgs), 3)
+        self.assertEqual(wa_msgs[0]["media_type"], "DOCUMENT")
+        self.assertEqual(wa_msgs[0]["media_filename"], "settlement_v1.docx")
+        self.assertEqual(wa_msgs[1]["media_type"], "AUDIO")
+        self.assertIn("Second line continuation", wa_msgs[2]["message_text"])
+
+        # 3. parse_json_export with unix timestamp, telegram rich text blocks, and invalid date
+        json_sample = json.dumps(
+            {
+                "messages": [
+                    {
+                        "from": "UserA",
+                        "ts": 1714560000,
+                        "text": [{"text": "Telegram"}, " rich block"],
+                    },
+                    {"author": "UserB", "sent_at": "invalid-iso", "body": "Standard message"},
+                ]
+            }
+        )
+        json_msgs = parse_json_export(json_sample)
+        self.assertEqual(len(json_msgs), 2)
+        self.assertEqual(json_msgs[0]["sender_name"], "UserA")
+        self.assertIn("Telegram", json_msgs[0]["message_text"])
+        self.assertEqual(json_msgs[1]["sender_name"], "UserB")

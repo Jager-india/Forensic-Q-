@@ -11,6 +11,7 @@ from typing import Any
 
 import requests
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from loguru import logger
@@ -304,5 +305,5 @@ def delete_audio_recording(recording_id: str | uuid.UUID) -> bool:
         recording = AudioRecording.objects.get(id=recording_id)
         recording.delete()
         return True
-    except (AudioRecording.DoesNotExist, ValueError):
+    except (AudioRecording.DoesNotExist, ValueError, ValidationError):
         return False

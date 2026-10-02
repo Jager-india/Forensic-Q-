@@ -23,6 +23,7 @@ Table audio_recordings {
   audio_file_path varchar(1024)
   sha256_hash varchar(64)
   transcription_status varchar(32) [default: 'Pending']
+  error_message text
   risk_score int [default: 0]
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
