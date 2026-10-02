@@ -1,0 +1,152 @@
+name: Ephemeral PR Preview Deployment (Cloudflare Tunnel)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    name: Spin Up Ephemeral PR Preview
+    # Run on PR opened/synced OR when someone comments "/preview" on a PR
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/preview'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Resolve PR Details
+        id: pr_meta
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+            # Fetch head ref for issue comment trigger
+            PR_DATA=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }})
+            HEAD_REF=$(echo "$PR_DATA" | jq -r '.head.ref')
+            echo "ref=$HEAD_REF" >> $GITHUB_OUTPUT
+          else
+            echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+            echo "ref=${{ github.event.pull_request.head.ref }}" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr_meta.outputs.ref }}
+
+      - name: Install uv Package Manager
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Install Dependencies
+        run: uv sync --frozen
+
+      - name: Install Cloudflare Tunnel Client (cloudflared)
+        run: |
+          curl -sL --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+          rm cloudflared.deb
+          cloudflared --version
+
+      - name: Initialize SQLite Database
+        env:
+          SECRET_KEY: preview-ephemeral-secret-key-12345
+          PORTAL_ACCESS_PASSWORD: forensiq2026
+          DEBUG: "True"
+          ALLOWED_HOSTS: "*"
+        run: |
+          uv run python manage.py migrate --noinput
+
+      - name: Start Django & Launch Cloudflare Tunnel
+        env:
+          SECRET_KEY: preview-ephemeral-secret-key-12345
+          PORTAL_ACCESS_PASSWORD: forensiq2026
+          DEBUG: "True"
+          ALLOWED_HOSTS: "*"
+          CSRF_TRUSTED_ORIGINS: "https://*.trycloudflare.com,http://localhost:8000,http://127.0.0.1:8000"
+        run: |
+          # 1. Start Django development server in background
+          uv run python manage.py runserver 0.0.0.0:8000 > django_server.log 2>&1 &
+          DJANGO_PID=$!
+          echo "DJANGO_PID=$DJANGO_PID" >> $GITHUB_ENV
+
+          # 2. Wait for Django server port 8000 to be ready
+          for i in {1..15}; do
+            if curl -s http://127.0.0.1:8000/login/ > /dev/null 2>&1; then
+              echo "Django server is responding on http://127.0.0.1:8000"
+              break
+            fi
+            sleep 1
+          done
+
+          # 3. Start Cloudflare Quick Tunnel in background
+          cloudflared tunnel --url http://127.0.0.1:8000 --no-autoupdate > cloudflared.log 2>&1 &
+          CF_PID=$!
+          echo "CF_PID=$CF_PID" >> $GITHUB_ENV
+
+          # 4. Extract assigned trycloudflare.com URL
+          TUNNEL_URL=""
+          for i in {1..30}; do
+            TUNNEL_URL=$(grep -o 'https://[-a-zA-Z0-9@:%._\+~#=]*\.trycloudflare\.com' cloudflared.log | head -n 1 || true)
+            if [ -n "$TUNNEL_URL" ]; then
+              echo "Cloudflare Tunnel Established: $TUNNEL_URL"
+              echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
+              break
+            fi
+            sleep 1
+          done
+
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "Failed to acquire Cloudflare Tunnel URL. Tunnel logs:"
+            cat cloudflared.log
+            exit 1
+          fi
+
+      - name: Post Live Preview URL on Pull Request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr_meta.outputs.number }}
+        run: |
+          BODY=$(cat <<EOF
+          ### 🚀 Forensi-Q Ephemeral PR Preview Deployed!
+
+          A live, isolated preview of this Pull Request has been deployed using **Cloudflare Quick Tunnels** and **Django on GitHub Actions**.
+
+          | Parameter | Details |
+          | :--- | :--- |
+          | **🌐 Live URL** | [**${{ env.TUNNEL_URL }}**](${{ env.TUNNEL_URL }}) |
+          | **🔑 Portal Password** | \`forensiq2026\` |
+          | **📌 Commit SHA** | \`${{ github.sha }}\` |
+          | **⏱️ Session Lifetime** | Active for **45 minutes** (or until cancelled / new commit) |
+          | **🛡️ Architecture** | Python 3.13, SQLite WAL, Django Cotton 6.1 |
+
+          > [!NOTE]
+          > All 9 forensic modules (Q-Bank, Q-Verify, Q-Voice, Q-Scan, Q-Ledger, Q-Mail, Q-Chat, Q-Link, Q-Trail) are fully accessible in this preview.
+          EOF
+          )
+
+          gh pr comment "$PR_NUMBER" --body "$BODY"
+
+      - name: Keep Preview Alive for Interactive Testing
+        run: |
+          echo "Preview server is online at ${{ env.TUNNEL_URL }}."
+          echo "Holding runner open for 45 minutes (2700 seconds)..."
+          # Wait up to 45 minutes; job can be cancelled early by pushing a new commit or closing the PR
+          sleep 2700 || true
+          echo "Session timed out after 45 minutes. Gracefully shutting down preview."

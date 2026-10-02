@@ -50,17 +50,42 @@ uv run python scripts/validate_project.py
 ### What the Validator Enforces:
 1. **Mandatory Documentation:** Every app must have non-empty `INSTRUCTION.md`, `SCHEMA.md` (with DBML code blocks for dbdiagram.io), and `USER_GUIDE.md`.
 2. **Cotton Template Standards:** Validates that no illegal `<c-slot:name>` tags are used (must use `<c-slot name="name">`).
-3. **Django Sanity Checks:** Executes `python manage.py check` to guarantee zero syntax or ORM errors before any commit can succeed.
+3. **Django Sanity Checks:** Executes `python manage.py check` and `makemigrations --check` to guarantee zero syntax, ORM, or unmigrated schema errors.
+4. **Code Quality & Security:** Runs Ruff formatting & linting, and Bandit AST security analysis.
+
+---
+
+## 🤖 Continuous Integration & Ephemeral PR Previews
+
+For collaborative development with interns and reviewers, ForensiQ includes automated GitHub Actions:
+
+### 1. Automated Quality & Coverage Gate (`ci.yml`)
+- Runs on every push to `main` and on all Pull Requests.
+- Enforces strict architecture rules, Bandit security checks, and Ruff formatting.
+- Executes the full 130-test unit suite and 10-phase Master E2E suite under coverage.
+- **Coverage Rule:** The PR is automatically blocked if test coverage drops below **90.0%**.
+
+### 2. Ephemeral PR Preview Environments (`pr-preview.yml`)
+- Every Pull Request automatically spins up an isolated, live Django instance via **Cloudflare Quick Tunnels** (100% free, zero external accounts needed).
+- The GitHub Actions bot comments the live HTTPS preview link directly on the PR (e.g. `https://random-subdomain.trycloudflare.com`).
+- Reviewers can test interactive dashboards, file uploads, and analytical queries without cloning the PR locally.
+- To re-trigger a preview at any time, comment `/preview` on the Pull Request.
 
 ---
 
 ## 🚀 Getting Started
 
-### 1. Run Development Server
+### 1. Setup Local Pre-Commit Hook (Mandatory for Contributors)
+```bash
+uv run pre-commit install
+```
+
+### 2. Run Development Server
 ```bash
 uv run python manage.py runserver 127.0.0.1:8000
 ```
 
-### 2. Access the Portal
+### 3. Access the Portal
 - **Landing Dashboard:** `http://127.0.0.1:8000/`
-- **Master Authentication Portal:** Enter master portal access password to unlock analytical engines.
+- **Master Authentication Portal:** Enter master portal access password (`forensiq2026` in `.env`) to unlock analytical engines.
+
