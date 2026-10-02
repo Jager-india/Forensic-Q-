@@ -574,3 +574,21 @@ class QScanDjangoServiceAndViewsTests(TestCase):
             reverse("q_scan:delete_device", kwargs={"device_id": uuid.uuid4()})
         )
         self.assertEqual(res_del_404.status_code, 302)
+
+    def test_directory_exclusion_logic(self):
+        root = Path(tempfile.gettempdir()) / "scan_test_dir"
+        scanner = HighPerformanceDiskScanner(
+            keywords=["confidential"],
+            target_directories=[str(root)],
+            exclude_directories=[".git", "node_modules", str(root / "custom_skip")],
+        )
+        # Targeted root must NOT be excluded
+        self.assertFalse(scanner.is_directory_excluded(str(root)))
+        # Subdirectories matching exclusion parts or prefix
+        self.assertTrue(scanner.is_directory_excluded(str(root / ".git")))
+        self.assertTrue(scanner.is_directory_excluded(str(root / ".git" / "objects")))
+        self.assertTrue(scanner.is_directory_excluded(str(root / "node_modules" / "package")))
+        self.assertTrue(scanner.is_directory_excluded(str(root / "custom_skip")))
+        self.assertTrue(scanner.is_directory_excluded(str(root / "custom_skip" / "deep")))
+        # Non-excluded normal directory
+        self.assertFalse(scanner.is_directory_excluded(str(root / "normal_folder")))

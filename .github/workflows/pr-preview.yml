@@ -142,7 +142,11 @@ jobs:
           EOF
           )
 
-          gh pr comment "$PR_NUMBER" --body "$BODY"
+          # 1. Post to GitHub Actions Step Summary for direct one-click access
+          echo "$BODY" >> $GITHUB_STEP_SUMMARY
+
+          # 2. Attempt to comment on PR (fails gracefully if token is read-only, e.g. from fork PR)
+          gh pr comment "$PR_NUMBER" --body "$BODY" || echo "::warning::Could not post comment to PR due to token permissions. Live preview URL is available in Job Summary."
 
       - name: Keep Preview Alive for Interactive Testing
         run: |
