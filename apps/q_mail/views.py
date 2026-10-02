@@ -6,21 +6,20 @@ Thin views integrating Django Cotton components, Tabulator.js grids, and Plotly 
 import json
 from pathlib import Path
 
-import plotly.express as px
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 from loguru import logger
 
-from .models import EmailAttachment, MailboxInvestigation
 from .selectors import (
+    get_attachment_by_id,
+    get_counterparty_chart_html,
     get_email_detail,
+    get_global_mailbox_stats,
     get_investigation_summary_metrics,
     get_mailbox_progress_state,
     get_paginated_investigation_emails,
-    get_top_counterparties,
-    list_mailbox_investigations,
 )
 from .services import (
     cancel_mailbox_processing,
@@ -32,32 +31,16 @@ from .services import (
 
 
 @require_GET
-def investigation_list_view(request: HttpRequest) -> HttpResponse:
+def dashboard_view(request: HttpRequest) -> HttpResponse:
     """
     Main Q-Mail Dashboard: Lists all audit mailbox investigations and upload portal.
     """
     recover_stalled_investigations()
-    investigations = list_mailbox_investigations()
-
-    total_mailboxes = investigations.count()
-    completed_count = investigations.filter(
-        status=MailboxInvestigation.IngestionStatus.COMPLETED
-    ).count()
-    processing_count = investigations.filter(
-        status=MailboxInvestigation.IngestionStatus.PROCESSING
-    ).count()
-    total_messages = sum(inv.processed_messages_count for inv in investigations)
-
+    stats = get_global_mailbox_stats()
     return render(
         request,
-        "q_mail/landing.html",
-        {
-            "investigations": investigations,
-            "total_mailboxes": total_mailboxes,
-            "completed_count": completed_count,
-            "processing_count": processing_count,
-            "total_messages": total_messages,
-        },
+        "q_mail/dashboard.html",
+        stats,
     )
 
 
@@ -79,6 +62,36 @@ def initiate_upload_view(request: HttpRequest) -> JsonResponse:
     auditee_designation = data.get("auditee_designation", "").strip()
     pst_file_name = data.get("pst_file_name", "evidence.pst").strip()
     file_size_bytes = int(data.get("file_size_bytes", 0))
+
+    profile_id = data.get("profile_id", "").strip() or None
+    new_profile_name = data.get("new_profile_name", "").strip()
+    new_profile_dept = data.get("new_profile_dept", "").strip()
+
+    from core.profiles import create_investigation_profile, get_profile_by_id
+
+    if profile_id:
+        profile = get_profile_by_id(profile_id)
+        if profile:
+            auditee_name = profile.full_name
+            if not auditee_email and profile.email:
+                auditee_email = profile.email
+            if not auditee_department and profile.department:
+                auditee_department = profile.department
+            if not auditee_designation and profile.designation:
+                auditee_designation = profile.designation
+    elif new_profile_name:
+        auditee_name = new_profile_name
+        if new_profile_dept and not auditee_department:
+            auditee_department = new_profile_dept
+        try:
+            create_investigation_profile(
+                full_name=new_profile_name,
+                department=auditee_department,
+                designation=auditee_designation,
+                email=auditee_email,
+            )
+        except Exception as exc:
+            logger.debug(f"Inline profile creation in Q-Mail: {exc}")
 
     if not (auditee_name and auditee_email):
         return JsonResponse({"error": "Auditee name and email are mandatory fields."}, status=400)
@@ -345,27 +358,7 @@ def investigation_detail_view(request: HttpRequest, mailbox_id: str) -> HttpResp
     inv = summary["investigation"]
 
     # Plotly Top Counterparties Bar Chart
-    top_participants = get_top_counterparties(mailbox_id, limit=8)
-    chart_html = ""
-    if top_participants:
-        fig = px.bar(
-            x=[p["count"] for p in top_participants],
-            y=[p["display_name"] for p in top_participants],
-            orientation="h",
-            labels={"x": "Total Messages Exchanged", "y": "Counterparty"},
-            color_discrete_sequence=["#a855f7"],  # Purple-500
-        )
-        fig.update_layout(
-            template="plotly_dark",
-            margin={"l": 20, "r": 20, "t": 20, "b": 20},
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            font={"family": "Inter, sans-serif", "color": "#a1a1aa"},
-            xaxis={"gridcolor": "#27272a", "linecolor": "#27272a"},
-            yaxis={"gridcolor": "#27272a", "linecolor": "#27272a", "autorange": "reversed"},
-            height=280,
-        )
-        chart_html = fig.to_html(full_html=False, include_plotlyjs=False)
+    chart_html = get_counterparty_chart_html(mailbox_id, limit=8)
 
     return render(
         request,
@@ -422,7 +415,7 @@ def download_attachment_view(request: HttpRequest, attachment_id: str) -> FileRe
     """
     Downloads physical evidence attachment with proper content-disposition.
     """
-    attachment = get_object_or_404(EmailAttachment, id=attachment_id)
+    attachment = get_attachment_by_id(attachment_id)
     if not attachment.storage_path or not Path(attachment.storage_path).exists():
         raise Http404("Physical attachment file not found on disk.")
 

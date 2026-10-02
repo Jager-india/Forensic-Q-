@@ -4,14 +4,14 @@
     <c-page_header 
         title="Q-Mail" 
         subtitle="Enterprise forensic mailbox extraction, PST chain of custody, and communication network reconstruction." 
-        icon="fa-solid fa-envelope-open-text"
+        icon="fa-solid fa-envelope-open-text" 
         icon_color="text-purple-400"
         back_url="/">
         
         <button onclick="openUploadModal()" 
                 class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-600/20 transition-all transform hover:-translate-y-0.5 cursor-pointer">
             <i class="fa-solid fa-cloud-arrow-up"></i>
-            <span>Ingest PST Mailbox (~50 GB)</span>
+            <span>Import PST Mailbox</span>
         </button>
     </c-page_header>
 
@@ -46,11 +46,29 @@
             variant="sky" />
     </div>
 
-    <!-- Active Audit Cases Container -->
-    <c-card title="Mailbox Audit Investigations" subtitle="Select an audit case to access the Tabulator evidence grid and network analysis." icon="fa-solid fa-inbox" icon_color="text-purple-400">
+    <!-- Audited Mailboxes Directory -->
+    <div x-data="{
+        searchQuery: '',
+        matches(ref, name, email, dept) {
+            if (!this.searchQuery) return true;
+            const q = this.searchQuery.toLowerCase().trim();
+            return (ref + ' ' + name + ' ' + email + ' ' + dept).toLowerCase().includes(q);
+        }
+    }">
+    <c-card title="Audited Mailboxes Directory" subtitle="Select an audited mailbox to access the Tabulator evidence grid and network analysis." icon="fa-solid fa-folder-tree" icon_color="text-purple-400">
         
         <c-slot name="actions">
-            <span class="text-xs font-mono text-slate-400 dark:text-zinc-500">{{ investigations.count }} Total Cases</span>
+            <div class="flex items-center gap-3">
+                <div class="relative w-48 sm:w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" x-model="searchQuery" placeholder="Search mailboxes directory..."
+                        class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-purple-500">
+                    <button type="button" x-show="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+                <span class="text-xs font-mono text-slate-400 dark:text-zinc-500 whitespace-nowrap">{{ investigations.count }} Mailbox(es) Configured</span>
+            </div>
         </c-slot>
 
         <div class="overflow-x-auto">
@@ -68,7 +86,8 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-zinc-800/60 text-xs">
                     {% for inv in investigations %}
-                    <tr class="hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors group">
+                    <tr x-show="matches('{{ inv.audit_ref|escapejs }}', '{{ inv.auditee_name|escapejs }}', '{{ inv.auditee_email|escapejs }}', '{{ inv.auditee_department|escapejs }}')"
+                        class="hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors group">
                         <td class="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
                             {{ inv.audit_ref }}
                         </td>
@@ -123,7 +142,7 @@
                         <td class="py-3.5 px-4 text-center">
                             <a href="{% url 'q_mail:detail' inv.id %}" 
                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-purple-600 dark:bg-zinc-800 dark:hover:bg-purple-600 text-slate-700 dark:text-zinc-300 hover:text-white dark:hover:text-white font-semibold transition-all">
-                                <span>Open</span>
+                                <span>Open Workspace</span>
                                 <i class="fa-solid fa-arrow-right text-[10px]"></i>
                             </a>
                         </td>
@@ -133,17 +152,27 @@
                         <td colspan="7" class="py-12 text-center text-slate-400 dark:text-zinc-500">
                             <i class="fa-solid fa-inbox text-3xl text-purple-400 mb-2 block"></i>
                             <p class="font-semibold">No PST mailboxes ingested yet.</p>
-                            <p class="text-xs mt-1">Click "Ingest PST Mailbox" to register an audit case and upload a .pst file.</p>
+                            <p class="text-xs mt-1">Click "Import PST Mailbox" to register an audit case and upload a .pst file.</p>
                         </td>
                     </tr>
                     {% endfor %}
+                    <tr x-cloak x-show="searchQuery && !Array.from($el.parentElement.querySelectorAll('tr[x-show*=\'matches\']')).some(el => el.style.display !== 'none')">
+                        <td colspan="7" class="py-10 text-center text-slate-400 bg-slate-50/50 dark:bg-zinc-800/20">
+                            <i class="fa-solid fa-magnifying-glass text-xl mb-1 block"></i>
+                            <p class="text-xs font-semibold">No mailbox investigations matching "<span x-text="searchQuery"></span>"</p>
+                            <button type="button" @click="searchQuery = ''" class="mt-1 text-xs text-purple-400 hover:underline font-semibold cursor-pointer">
+                                Clear search filter
+                            </button>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
     </c-card>
+    </div>
 
     <!-- Chunked 50GB PST Upload Modal -->
-    <c-modal id="upload-modal" title="Ingest PST Mailbox Evidence (~50 GB)" subtitle="Fill in auditee details and upload .pst file in streaming chunks." icon="fa-solid fa-cloud-arrow-up">
+    <c-modal id="upload-modal" title="Import PST Mailbox Evidence (~50 GB)" subtitle="Fill in auditee details and upload .pst file in streaming chunks." icon="fa-solid fa-cloud-arrow-up">
         
         <form id="pst-upload-form" class="space-y-4" onsubmit="handleFormSubmit(event)">
             {% csrf_token %}
@@ -162,24 +191,19 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Auditee / Custodian Name *</label>
-                    <input type="text" id="modal-auditee-name" required placeholder="e.g. Rajiv Menon" 
-                           class="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Auditee Corporate Email *</label>
-                    <input type="email" id="modal-auditee-email" required placeholder="e.g. rajiv.menon@corp.internal" 
-                           class="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500">
-                </div>
+            <div>
+                <c-profile_selector
+                    label="Target Auditee / Investigation Profile"
+                    name="profile_id"
+                    new_name="new_profile_name"
+                    new_dept="new_profile_dept"
+                    required="true" />
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Department / Unit</label>
-                    <input type="text" id="modal-auditee-dept" placeholder="e.g. Supply Chain & Logistics" 
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Auditee Corporate Email *</label>
+                    <input type="email" id="modal-auditee-email" required placeholder="e.g. rajiv.menon@corp.internal" 
                            class="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-purple-500">
                 </div>
 
@@ -299,17 +323,25 @@
 
             const auditRef = document.getElementById('modal-audit-ref').value.trim();
             const auditName = document.getElementById('modal-audit-name').value.trim();
-            const auditeeName = document.getElementById('modal-auditee-name').value.trim();
             const auditeeEmail = document.getElementById('modal-auditee-email').value.trim();
-            const auditeeDept = document.getElementById('modal-auditee-dept').value.trim();
             const auditeeDesig = document.getElementById('modal-auditee-desig').value.trim();
 
+            const profileIdInput = document.querySelector('#pst-upload-form input[name="profile_id"]');
+            const newProfileNameInput = document.querySelector('#pst-upload-form input[name="new_profile_name"]');
+            const newProfileDeptInput = document.querySelector('#pst-upload-form input[name="new_profile_dept"]');
+            const profileId = profileIdInput ? profileIdInput.value.trim() : '';
+            const newProfileName = newProfileNameInput ? newProfileNameInput.value.trim() : '';
+            const newProfileDept = newProfileDeptInput ? newProfileDeptInput.value.trim() : '';
+
             const payload = {
-                audit_ref: auditRef || `AUD-${auditeeName.substring(0, 4).toUpperCase()}-2026`,
-                audit_name: auditName || `Forensic Mailbox Audit - ${auditeeName}`,
-                auditee_name: auditeeName,
+                audit_ref: auditRef || (newProfileName ? `AUD-${newProfileName.substring(0, 4).toUpperCase()}-2026` : 'AUD-CASE-2026'),
+                audit_name: auditName || (newProfileName ? `Forensic Mailbox Audit - ${newProfileName}` : 'Forensic Mailbox Audit'),
+                profile_id: profileId,
+                new_profile_name: newProfileName,
+                new_profile_dept: newProfileDept,
+                auditee_name: newProfileName,
                 auditee_email: auditeeEmail,
-                auditee_department: auditeeDept,
+                auditee_department: newProfileDept,
                 auditee_designation: auditeeDesig,
                 pst_file_name: selectedPstFile.name,
                 file_size_bytes: selectedPstFile.size,

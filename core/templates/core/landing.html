@@ -1,7 +1,7 @@
 <c-base title="ForensiQ | Forensic Investigation Platform">
 
-    <!-- Page Header Section -->
-    <div class="mb-8">
+    <!-- Page Header Section with Top Right Add Profile -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8" x-data="{ showProfileModal: false }">
         <div>
             <div
                 class="flex items-center space-x-2 text-xs font-mono font-semibold uppercase tracking-wider text-amber-500 mb-1.5">
@@ -12,7 +12,111 @@
                 Investigation Platform
             </h1>
         </div>
+
+        <!-- Top Right: Add Profile Button -->
+        <div>
+            <button type="button" id="landing-add-profile-btn" @click="showProfileModal = true"
+                class="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-amber-500/20 cursor-pointer">
+                <i class="fa-solid fa-user-plus text-xs"></i>
+                <span>Add Profile</span>
+            </button>
+        </div>
+
+
+        <!-- Add Investigation Profile Modal -->
+        <div x-show="showProfileModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+            <div @click.outside="showProfileModal = false"
+                class="bg-theme-surface border border-theme-border rounded-2xl w-full max-w-lg shadow-2xl p-6 relative">
+                <button type="button" @click="showProfileModal = false" class="absolute top-4 right-4 text-theme-muted hover:text-theme-text cursor-pointer">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-user-shield"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-theme-text">Register Investigation Profile</h3>
+                        <p class="text-xs text-theme-muted">Unified across Q-Bank, Q-Voice, Q-Verify, Q-Ledger, Q-Mail &amp; Q-Chat.</p>
+                    </div>
+                </div>
+
+                <form method="POST" action="{% url 'create_profile' %}" class="space-y-3.5">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="/">
+
+                    <div>
+                        <label class="block text-xs font-semibold text-theme-text mb-1">Target / Auditee Full Name <span class="text-rose-500">*</span></label>
+                        <input type="text" name="full_name" placeholder="e.g. Ramesh Chandra / Rajesh Sharma" required
+                            class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-theme-text mb-1">Employee ID / Target Ref</label>
+                            <input type="text" name="employee_id" placeholder="e.g. EMP-9042"
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-theme-text mb-1">Initial Risk Level</label>
+                            <select name="risk_level"
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500 cursor-pointer">
+                                <option value="LOW">Low Risk</option>
+                                <option value="MEDIUM" selected>Medium Risk</option>
+                                <option value="HIGH">High Risk / Flagged</option>
+                                <option value="CRITICAL">Critical Intercept</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-theme-text mb-1">Department / Division</label>
+                            <input type="text" name="department" placeholder="e.g. Strategic Procurement"
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-theme-text mb-1">Designation / Role</label>
+                            <input type="text" name="designation" placeholder="e.g. Senior Buyer / GM"
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-theme-text mb-1">Official Email</label>
+                            <input type="email" name="email" placeholder="e.g. target@company.internal"
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-theme-text mb-1">Contact Phone</label>
+                            <input type="text" name="phone" placeholder="e.g. +91 98401 23456"
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-theme-text mb-1">Investigation Hypothesis / Notes</label>
+                        <textarea name="notes" rows="2" placeholder="Audit scope, whistle-blower allegations, or suspicious parameter notes..."
+                            class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500"></textarea>
+                    </div>
+
+                    <div class="pt-3 border-t border-theme-border flex items-center justify-end gap-3">
+                        <button type="button" @click="showProfileModal = false"
+                            class="px-4 py-2 rounded-xl text-xs font-semibold text-theme-muted hover:text-theme-text bg-theme-app border border-theme-border cursor-pointer">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                            class="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20">
+                            <i class="fa-solid fa-check"></i>
+                            <span>Register Profile</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
+
 
     <!-- Dynamic Modules Flex Grid (Centered last row if not multiple of 3) -->
     <div class="flex flex-wrap justify-center gap-6">

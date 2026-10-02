@@ -5,7 +5,7 @@ from . import views
 app_name = "q_mail"
 
 urlpatterns = [
-    path("", views.investigation_list_view, name="list"),
+    path("", views.dashboard_view, name="dashboard"),
     path("upload/initiate/", views.initiate_upload_view, name="upload_initiate"),
     path("upload/chunk/", views.chunk_upload_view, name="upload_chunk"),
     path("investigation/<uuid:mailbox_id>/", views.investigation_detail_view, name="detail"),

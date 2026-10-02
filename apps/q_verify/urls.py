@@ -5,7 +5,7 @@ from . import views
 app_name = "q_verify"
 
 urlpatterns = [
-    path("", views.verification_dashboard_view, name="dashboard"),
+    path("", views.dashboard_view, name="dashboard"),
     path("case/create/", views.create_case_api_view, name="case_create"),
     path("case/<uuid:case_id>/", views.case_detail_view, name="case_detail"),
     path("case/<uuid:case_id>/upload/", views.upload_documents_api_view, name="case_upload"),

@@ -11,6 +11,8 @@ from django.contrib import messages
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 
+from core.profiles import resolve_or_create_profile_from_request
+
 from .models import AudioRecording
 from .selectors import (
     get_all_recordings,
@@ -26,7 +28,7 @@ from .services import (
 )
 
 
-def voice_dashboard_view(request: HttpRequest) -> HttpResponse:
+def dashboard_view(request: HttpRequest) -> HttpResponse:
     """
     Common Q-Voice Hub & Case Directory Dashboard.
     Displays global platform metrics and the directory of all ingested voice call cases.
@@ -48,7 +50,12 @@ def voice_dashboard_view(request: HttpRequest) -> HttpResponse:
         else:
             call_ref = request.POST.get("call_ref", "")
             call_title = request.POST.get("call_title", "")
-            custodian_name = request.POST.get("custodian_name", "")
+            _profile, resolved_name = resolve_or_create_profile_from_request(
+                request, default_department="Strategic Sourcing"
+            )
+            custodian_name = (
+                resolved_name or request.POST.get("custodian_name", "").strip() or "Target Auditee"
+            )
 
             recording, error_msg = ingest_audio_recording(
                 audio_file=audio_file,

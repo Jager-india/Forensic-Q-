@@ -219,8 +219,8 @@ print(
 # 4. Q-Mail Application Testing
 # -------------------------------------------------------------
 print("\n[STEP 4] Testing Application 3: Q-Mail (PST Mailbox Investigation & Forensic Parser)...")
-mail_home_res = client.get(reverse("q_mail:list"))
-assert mail_home_res.status_code == 200, f"Q-Mail list failed: {mail_home_res.status_code}"
+mail_home_res = client.get(reverse("q_mail:dashboard"))
+assert mail_home_res.status_code == 200, f"Q-Mail dashboard failed: {mail_home_res.status_code}"
 assert b"Mailbox Investigations" in mail_home_res.content or b"Mail" in mail_home_res.content, (
     "Q-Mail branding missing"
 )

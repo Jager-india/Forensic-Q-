@@ -24,7 +24,7 @@
             <button onclick="openUploadModal()" 
                     class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-lg shadow-teal-600/20 transition-all transform hover:-translate-y-0.5 cursor-pointer">
                 <i class="fa-solid fa-file-arrow-up"></i>
-                <span>Import Scan Results CSV</span>
+                <span>Import Scan Findings</span>
             </button>
         </div>
     </c-page_header>
@@ -99,10 +99,27 @@
     </div>
 
     <!-- Scanned Endpoints Case List -->
-    <div class="mb-8">
-        <c-card title="Audited Endpoints & Scanned Drives" subtitle="Originating host machines and triage reports." icon="fa-solid fa-network-wired" icon_color="text-teal-400">
+    <div class="mb-8" x-data="{
+        searchQuery: '',
+        matches(host, title, cust, drive) {
+            if (!this.searchQuery) return true;
+            const q = this.searchQuery.toLowerCase().trim();
+            return (host + ' ' + title + ' ' + cust + ' ' + drive).toLowerCase().includes(q);
+        }
+    }">
+        <c-card title="Audited Endpoints Directory" subtitle="Originating host machines and triage scan reports." icon="fa-solid fa-network-wired" icon_color="text-teal-400">
             <c-slot name="actions">
-                <span class="text-xs font-mono text-slate-400">{{ devices.count }} Total Endpoints</span>
+                <div class="flex items-center gap-3">
+                    <div class="relative w-48 sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" x-model="searchQuery" placeholder="Search endpoints directory..."
+                            class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500">
+                        <button type="button" x-show="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+                    <span class="text-xs font-mono text-slate-400 dark:text-zinc-500 whitespace-nowrap">{{ devices.count }} Endpoint(s) Configured</span>
+                </div>
             </c-slot>
 
             {% if devices %}
@@ -121,7 +138,8 @@
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-zinc-800/60 text-xs">
                             {% for dev in devices %}
-                            <tr class="hover:bg-slate-50/50 dark:hover:bg-zinc-800/40 transition-colors">
+                            <tr x-show="matches('{{ dev.hostname|escapejs }}', '{{ dev.scan_title|escapejs }}', '{{ dev.custodian_name|escapejs }}', '{{ dev.drive_letter|escapejs }}')"
+                                class="hover:bg-slate-50/50 dark:hover:bg-zinc-800/40 transition-colors">
                                 <td class="py-3 px-4">
                                     <div class="flex items-center gap-2">
                                         <i class="fa-solid fa-desktop text-teal-400"></i>
@@ -162,6 +180,15 @@
                                 </td>
                             </tr>
                             {% endfor %}
+                            <tr x-cloak x-show="searchQuery && !Array.from($el.parentElement.querySelectorAll('tr[x-show*=\'matches\']')).some(el => el.style.display !== 'none')">
+                                <td colspan="7" class="py-10 text-center text-slate-400 bg-slate-50/50 dark:bg-zinc-800/20">
+                                    <i class="fa-solid fa-magnifying-glass text-xl mb-1 block"></i>
+                                    <p class="text-xs font-semibold">No endpoints matching "<span x-text="searchQuery"></span>"</p>
+                                    <button type="button" @click="searchQuery = ''" class="mt-1 text-xs text-teal-400 hover:underline font-semibold cursor-pointer">
+                                        Clear search filter
+                                    </button>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -267,9 +294,7 @@
                                class="w-full px-3 py-2 text-xs rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-teal-500">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-zinc-300 mb-1">Custodian / User</label>
-                        <input type="text" name="custodian_name" placeholder="e.g., John Doe"
-                               class="w-full px-3 py-2 text-xs rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-teal-500">
+                        <c-profile_selector name="profile_id" label="Target Auditee / Investigation Profile" />
                     </div>
                 </div>
 

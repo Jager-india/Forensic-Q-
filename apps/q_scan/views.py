@@ -28,7 +28,7 @@ from .services import (
 
 
 @require_GET
-def scan_dashboard_view(request: HttpRequest) -> HttpResponse:
+def dashboard_view(request: HttpRequest) -> HttpResponse:
     """
     Main Q-Scan forensic dashboard displaying audited endpoints, keyword metrics,
     and high-performance remote-paginated evidence grid.
@@ -101,6 +101,16 @@ def upload_scan_csv_view(request: HttpRequest) -> HttpResponse:
     scan_title = request.POST.get("scan_title", "").strip() or "Audited Endpoint Scan"
     custodian_name = request.POST.get("custodian_name", "").strip()
     drive_letter = request.POST.get("drive_letter", "C:\\").strip()
+
+    from core.profiles import resolve_or_create_profile_from_request
+
+    profile, resolved_name = resolve_or_create_profile_from_request(
+        request, default_department="Endpoint Security"
+    )
+    if profile:
+        custodian_name = profile.full_name
+    elif not custodian_name and resolved_name:
+        custodian_name = resolved_name
 
     try:
         device = ingest_scan_csv_file(

@@ -49,24 +49,43 @@
     </div>
 
     <!-- Main Channels Grid -->
-    <div class="mb-8">
-        <div class="flex items-center justify-between mb-4">
+    <div class="mb-8" x-data="{
+        searchQuery: '',
+        matches(name, cust, plat) {
+            if (!this.searchQuery) return true;
+            const q = this.searchQuery.toLowerCase().trim();
+            return (name + ' ' + cust + ' ' + plat).toLowerCase().includes(q);
+        }
+    }">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
                 <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <i class="fa-solid fa-folder-tree text-sky-400"></i>
-                    <span>Investigated Chat Channels</span>
+                    <i class="fa-solid fa-comments text-sky-400"></i>
+                    <span>Audited Chat Channels Directory</span>
                 </h3>
                 <p class="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
                     Click any conversation to reconstruct full chat bubble streams, audit participant timelines, and inspect flagged off-channel messages.
                 </p>
             </div>
-            <span class="text-xs font-mono text-slate-400 font-semibold">{{ channels|length }} Channel(s)</span>
+            
+            <div class="flex items-center gap-3">
+                <div class="relative w-full sm:w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" x-model="searchQuery" placeholder="Search chat channels directory..."
+                        class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-sky-500">
+                    <button type="button" x-show="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+                <span class="text-xs font-mono text-slate-400 font-semibold whitespace-nowrap">{{ channels|length }} Channel(s) Configured</span>
+            </div>
         </div>
 
         {% if channels %}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {% for ch in channels %}
-                <div class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 p-5 shadow-sm hover:border-sky-500/50 dark:hover:border-sky-500/40 transition-all flex flex-col justify-between">
+                <div x-show="matches('{{ ch.channel_name|escapejs }}', '{{ ch.custodian_name|escapejs }}', '{{ ch.get_platform_display|escapejs }}')"
+                     class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 p-5 shadow-sm hover:border-sky-500/50 dark:hover:border-sky-500/40 transition-all flex flex-col justify-between">
                     <div>
                         <!-- Header / Platform Badge -->
                         <div class="flex items-start justify-between gap-3 mb-3">
@@ -159,6 +178,16 @@
                 </div>
                 {% endfor %}
             </div>
+
+            <!-- Empty Search State -->
+            <div x-cloak x-show="searchQuery && !Array.from($el.parentElement.querySelectorAll('div[x-show*=\'matches\']')).some(el => el.style.display !== 'none')"
+                 class="p-10 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800">
+                <i class="fa-solid fa-magnifying-glass text-2xl text-slate-400 mb-2 block"></i>
+                <p class="text-xs font-semibold text-slate-700 dark:text-zinc-300">No chat channels matching "<span x-text="searchQuery"></span>"</p>
+                <button type="button" @click="searchQuery = ''" class="mt-2 text-xs text-sky-500 hover:underline font-semibold cursor-pointer">
+                    Clear search filter
+                </button>
+            </div>
         {% else %}
             <div class="p-12 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-dashed border-slate-300 dark:border-zinc-800">
                 <div class="w-16 h-16 rounded-2xl bg-sky-500/10 text-sky-400 mx-auto flex items-center justify-center text-2xl mb-4">
@@ -189,7 +218,7 @@
             <form method="POST" action="{% url 'q_chat:upload' %}" enctype="multipart/form-data" class="space-y-4">
                 {% csrf_token %}
 
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Platform</label>
                         <select name="platform" class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500">
@@ -201,16 +230,14 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Target Custodian</label>
-                        <input type="text" name="custodian_name" placeholder="e.g. Arun Kumar, Rajesh M"
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Channel / Subject Title</label>
+                        <input type="text" name="channel_name" placeholder="e.g. Supplier Negotiation Thread"
                                class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Channel / Subject Title</label>
-                    <input type="text" name="channel_name" placeholder="e.g. Supplier Negotiation Thread, Procurement Group"
-                           class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500">
+                    <c-profile_selector name="profile_id" label="Target Auditee / Investigation Profile" />
                 </div>
 
                 <c-file_uploader 

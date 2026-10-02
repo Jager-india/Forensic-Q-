@@ -6,13 +6,13 @@ Thin views integrating Django Cotton components, Tabulator.js grids, and Plotly 
 import json
 from pathlib import Path
 
-import plotly.express as px
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .selectors import (
+    get_case_risk_chart_html,
     get_case_summary_metrics,
     get_global_verification_stats,
     get_paginated_verified_documents,
@@ -20,11 +20,11 @@ from .selectors import (
     get_verified_document_detail,
     list_verification_cases,
 )
-from .services import create_verification_case, ingest_and_verify_document
+from .services import create_verification_case_with_profile, ingest_and_verify_document
 
 
 @require_GET
-def verification_dashboard_view(request: HttpRequest) -> HttpResponse:
+def dashboard_view(request: HttpRequest) -> HttpResponse:
     """
     Main Q-Verify Dashboard: Global stats, rapid dropzone, and case list.
     """
@@ -33,7 +33,7 @@ def verification_dashboard_view(request: HttpRequest) -> HttpResponse:
 
     return render(
         request,
-        "q_verify/landing.html",
+        "q_verify/dashboard.html",
         {
             "cases": cases,
             "stats": stats,
@@ -60,16 +60,29 @@ def create_case_api_view(request: HttpRequest) -> JsonResponse:
     custodian_department = data.get("custodian_department", "").strip()
     notes = data.get("notes", "").strip()
 
-    if not (case_title and custodian_name):
-        return JsonResponse({"error": "Case title and custodian name are required."}, status=400)
+    profile_id = data.get("profile_id", "").strip() or None
+    new_profile_name = data.get("new_profile_name", "").strip()
+    new_profile_dept = data.get("new_profile_dept", "").strip()
 
-    case = create_verification_case(
+    if not custodian_name and new_profile_name:
+        custodian_name = new_profile_name
+        if not custodian_department and new_profile_dept:
+            custodian_department = new_profile_dept
+
+    if not case_title:
+        return JsonResponse({"error": "Case title is required."}, status=400)
+
+    if not custodian_name and not profile_id:
+        return JsonResponse({"error": "Target auditee or profile is required."}, status=400)
+
+    case = create_verification_case_with_profile(
         case_ref=case_ref,
         case_title=case_title,
         custodian_name=custodian_name,
         custodian_email=custodian_email,
         custodian_department=custodian_department,
         notes=notes,
+        profile_id=profile_id,
     )
 
     return JsonResponse(
@@ -90,37 +103,9 @@ def case_detail_view(request: HttpRequest, case_id: str) -> HttpResponse:
     case = summary["case"]
 
     # Plotly Risk Level Distribution Chart
-    risk_dist = summary["risk_distribution"]
     chart_html = ""
     if case.total_documents > 0:
-        fig = px.pie(
-            names=list(risk_dist.keys()),
-            values=list(risk_dist.values()),
-            color=list(risk_dist.keys()),
-            color_discrete_map={
-                "Authentic": "#10b981",  # Emerald
-                "Suspicious": "#f59e0b",  # Amber
-                "High Risk / Tampered": "#f43f5e",  # Rose
-            },
-            hole=0.6,
-        )
-        fig.update_layout(
-            template="plotly_dark",
-            margin={"l": 10, "r": 10, "t": 10, "b": 10},
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            font={"family": "Inter, sans-serif", "color": "#a1a1aa"},
-            showlegend=True,
-            legend={
-                "orientation": "h",
-                "yanchor": "bottom",
-                "y": -0.2,
-                "xanchor": "center",
-                "x": 0.5,
-            },
-            height=260,
-        )
-        chart_html = fig.to_html(full_html=False, include_plotlyjs=False)
+        chart_html = get_case_risk_chart_html(summary["risk_distribution"])
 
     return render(
         request,

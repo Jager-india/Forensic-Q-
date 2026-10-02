@@ -9,7 +9,7 @@ from . import views
 app_name = "q_voice"
 
 urlpatterns = [
-    path("", views.voice_dashboard_view, name="dashboard"),
+    path("", views.dashboard_view, name="dashboard"),
     path(
         "recording/<uuid:recording_id>/",
         views.recording_detail_view,

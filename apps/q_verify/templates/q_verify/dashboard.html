@@ -8,11 +8,13 @@
         icon_color="text-rose-400"
         back_url="/">
         
-        <button onclick="openCaseModal()" 
-                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/20 transition-all transform hover:-translate-y-0.5 cursor-pointer">
-            <i class="fa-solid fa-folder-plus"></i>
-            <span>New Verification Case</span>
-        </button>
+        <div class="flex items-center gap-2.5">
+            <button onclick="openCaseModal()" 
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/20 transition-all transform hover:-translate-y-0.5 cursor-pointer">
+                <i class="fa-solid fa-folder-plus"></i>
+                <span>New Verification Case</span>
+            </button>
+        </div>
     </c-page_header>
 
     <!-- Top KPI Summary Cards -->
@@ -80,10 +82,28 @@
     </div>
 
     <!-- Active Verification Cases Container -->
-    <c-card title="Verification Audit Cases" subtitle="Custodian collections and batch document authenticity cases." icon="fa-solid fa-folder-tree" icon_color="text-rose-400">
+    <div x-data="{
+        searchQuery: '',
+        matches(ref, title, custodian, dept) {
+            if (!this.searchQuery) return true;
+            const q = this.searchQuery.toLowerCase().trim();
+            return (ref + ' ' + title + ' ' + custodian + ' ' + dept).toLowerCase().includes(q);
+        }
+    }">
+    <c-card title="Verification Cases Directory" subtitle="Custodian collections and batch document authenticity cases." icon="fa-solid fa-folder-tree" icon_color="text-rose-400">
         
         <c-slot name="actions">
-            <span class="text-xs font-mono text-slate-400 dark:text-zinc-500">{{ cases.count }} Total Cases</span>
+            <div class="flex items-center gap-3">
+                <div class="relative w-48 sm:w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" x-model="searchQuery" placeholder="Search verification cases directory..."
+                        class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-rose-500">
+                    <button type="button" x-show="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+                <span class="text-xs font-mono text-slate-400 dark:text-zinc-500 whitespace-nowrap">{{ cases.count }} Case(s) Configured</span>
+            </div>
         </c-slot>
 
         <div class="overflow-x-auto">
@@ -102,7 +122,8 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-zinc-800/60 text-xs">
                     {% for case in cases %}
-                    <tr class="hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors group">
+                    <tr x-show="matches('{{ case.case_ref|escapejs }}', '{{ case.case_title|escapejs }}', '{{ case.custodian_name|escapejs }}', '{{ case.custodian_department|escapejs }}')"
+                        class="hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors group">
                         <td class="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
                             {{ case.case_ref }}
                         </td>
@@ -131,7 +152,7 @@
                         </td>
                         <td class="py-3.5 px-4 text-center">
                             <a href="{% url 'q_verify:case_detail' case.id %}" 
-                               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-600 dark:bg-zinc-800 dark:hover:bg-rose-600 text-slate-700 dark:text-zinc-300 hover:text-white dark:hover:text-white font-semibold transition-all">
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-600 dark:bg-zinc-800 dark:hover:bg-rose-600 text-slate-700 dark:text-zinc-300 hover:text-white dark:hover:text-white font-semibold transition-all">
                                 <span>Open Workstation</span>
                                 <i class="fa-solid fa-arrow-right text-[10px]"></i>
                             </a>
@@ -146,10 +167,20 @@
                         </td>
                     </tr>
                     {% endfor %}
+                    <tr x-cloak x-show="searchQuery && !Array.from($el.parentElement.querySelectorAll('tr[x-show*=\'matches\']')).some(el => el.style.display !== 'none')">
+                        <td colspan="8" class="py-10 text-center text-slate-400 bg-slate-50/50 dark:bg-zinc-800/20">
+                            <i class="fa-solid fa-magnifying-glass text-xl mb-1 block"></i>
+                            <p class="text-xs font-semibold">No verification cases matching "<span x-text="searchQuery"></span>"</p>
+                            <button type="button" @click="searchQuery = ''" class="mt-1 text-xs text-rose-500 hover:underline font-semibold cursor-pointer">
+                                Clear search filter
+                            </button>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
     </c-card>
+    </div>
 
     <!-- Create Case Modal -->
     <c-modal id="case-modal" title="New Verification Audit Case" subtitle="Create an investigation case to organize and analyze batches of questionable documents." icon="fa-solid fa-folder-plus">
@@ -168,18 +199,13 @@
                        class="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-rose-500">
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Custodian / Target *</label>
-                    <input type="text" id="modal-custodian-name" placeholder="e.g. Suresh Nair" required
-                           class="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-rose-500">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Department / Unit</label>
-                    <input type="text" id="modal-custodian-dept" placeholder="e.g. Accounts Payable"
-                           class="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-rose-500">
-                </div>
+            <div>
+                <c-profile_selector
+                    label="Target Auditee / Investigation Profile"
+                    name="profile_id"
+                    new_name="new_profile_name"
+                    new_dept="new_profile_dept"
+                    required="true" />
             </div>
 
             <div>
@@ -217,11 +243,16 @@
             const btn = document.getElementById('save-case-btn');
             btn.disabled = true;
 
+            const profileId = document.querySelector('#case-form [name=profile_id]')?.value || '';
+            const newName = document.querySelector('#case-form [name=new_profile_name]')?.value || '';
+            const newDept = document.querySelector('#case-form [name=new_profile_dept]')?.value || '';
+
             const payload = {
                 case_ref: document.getElementById('modal-case-ref').value.trim(),
                 case_title: document.getElementById('modal-case-title').value.trim(),
-                custodian_name: document.getElementById('modal-custodian-name').value.trim(),
-                custodian_department: document.getElementById('modal-custodian-dept').value.trim(),
+                profile_id: profileId,
+                custodian_name: newName.trim(),
+                custodian_department: newDept.trim(),
                 notes: document.getElementById('modal-notes').value.trim(),
             };
 

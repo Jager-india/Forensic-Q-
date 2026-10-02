@@ -303,12 +303,17 @@
                         <span>Frequent Credit Transactions</span>
                     </h4>
 
-                    <div class="w-full md:w-96">
+                    <div class="w-full md:w-96 space-y-1.5" x-data="{ creditSearch: '' }">
                         <label class="block text-xs font-semibold text-slate-400 mb-1">Select UPI Name:</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" x-model="creditSearch" placeholder="Type to filter credit counterparties..."
+                                class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 font-mono">
+                        </div>
                         <select x-model="selectedCreditEntity" 
                                 class="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-mono">
                             <option value="">-- Choose Frequent Credit Entity --</option>
-                            <template x-for="item in creditChoices" :key="item.name">
+                            <template x-for="item in creditChoices.filter(c => !creditSearch || c.selector.toLowerCase().includes(creditSearch.toLowerCase()))" :key="item.name">
                                 <option :value="item.name" x-text="item.selector"></option>
                             </template>
                         </select>
@@ -357,12 +362,17 @@
                         <span>Frequent Debit Transactions</span>
                     </h4>
 
-                    <div class="w-full md:w-96">
+                    <div class="w-full md:w-96 space-y-1.5" x-data="{ debitSearch: '' }">
                         <label class="block text-xs font-semibold text-slate-400 mb-1">Select a UPI Name:</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" x-model="debitSearch" placeholder="Type to filter debit counterparties..."
+                                class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-rose-500 font-mono">
+                        </div>
                         <select x-model="selectedDebitEntity" 
                                 class="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white focus:outline-none focus:border-rose-500 font-mono">
                             <option value="">-- Choose Frequent Debit Entity --</option>
-                            <template x-for="item in debitChoices" :key="item.name">
+                            <template x-for="item in debitChoices.filter(d => !debitSearch || d.selector.toLowerCase().includes(debitSearch.toLowerCase()))" :key="item.name">
                                 <option :value="item.name" x-text="item.selector"></option>
                             </template>
                         </select>

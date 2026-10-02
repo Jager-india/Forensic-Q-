@@ -35,3 +35,104 @@ class ForensicBaseModel(UUIDModel, TimeStampedModel):
 
     class Meta:
         abstract = True
+
+
+class InvestigationProfile(ForensicBaseModel):
+    """
+    Central Forensic Target / Investigation Subject Profile.
+    Unified across all Q-Apps (Q-Bank, Q-Voice, Q-Verify, Q-Ledger, Q-Mail, Q-Chat).
+    Represents an auditee, target custodian, employee, or subject of inquiry.
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active Investigation"
+        MONITORING = "MONITORING", "Under Monitoring"
+        CLEARED = "CLEARED", "Cleared / Closed"
+        FLAGGED = "FLAGGED", "High Risk / Flagged"
+
+    class RiskLevel(models.TextChoices):
+        LOW = "LOW", "Low Risk"
+        MEDIUM = "MEDIUM", "Medium Risk"
+        HIGH = "HIGH", "High Risk"
+        CRITICAL = "CRITICAL", "Critical Risk"
+
+    full_name = models.CharField(
+        max_length=255, db_index=True, help_text="Target / Auditee Full Name"
+    )
+    employee_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Employee ID or Case Reference",
+    )
+    department = models.CharField(
+        max_length=128, blank=True, default="", help_text="Department / Division"
+    )
+    designation = models.CharField(
+        max_length=128, blank=True, default="", help_text="Designation / Position"
+    )
+    email = models.EmailField(blank=True, default="", help_text="Official / Primary Email")
+    phone = models.CharField(max_length=32, blank=True, default="", help_text="Contact Phone")
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+        db_index=True,
+    )
+    risk_level = models.CharField(
+        max_length=20,
+        choices=RiskLevel.choices,
+        default=RiskLevel.MEDIUM,
+    )
+    notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Investigative hypothesis, case background, or notes",
+    )
+    avatar_color = models.CharField(
+        max_length=32,
+        default="indigo",
+        help_text="UI Accent color tag",
+    )
+
+    class Meta:
+        app_label = "core"
+        ordering = ["full_name"]
+        verbose_name = "Investigation Profile"
+        verbose_name_plural = "Investigation Profiles"
+
+    def __str__(self) -> str:
+        dept_str = f" • {self.department}" if self.department else ""
+        return f"{self.full_name}{dept_str}"
+
+    @property
+    def display_name(self) -> str:
+        if self.department:
+            return f"{self.full_name} ({self.department})"
+        return self.full_name
+
+    @property
+    def initials(self) -> str:
+        parts = self.full_name.strip().split()
+        if not parts:
+            return "Q"
+        if len(parts) == 1:
+            return parts[0][:2].upper()
+        return f"{parts[0][0]}{parts[-1][0]}".upper()
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "id": str(self.id),
+            "full_name": self.full_name,
+            "employee_id": self.employee_id,
+            "department": self.department,
+            "designation": self.designation,
+            "email": self.email,
+            "phone": self.phone,
+            "status": self.status,
+            "risk_level": self.risk_level,
+            "initials": self.initials,
+            "display_name": self.display_name,
+            "avatar_color": self.avatar_color,
+        }

@@ -60,6 +60,43 @@ def delete_audited_person(person_id: str | uuid.UUID) -> bool:
 
 
 @transaction.atomic
+def get_or_create_audited_person_from_profile(profile: Any) -> AuditedPerson:
+    """
+    Retrieves or creates an AuditedPerson matching an InvestigationProfile.
+    """
+    person, created = AuditedPerson.objects.get_or_create(
+        full_name=profile.full_name,
+        defaults={
+            "employee_id": profile.employee_id,
+            "department": profile.department,
+            "designation": profile.designation,
+            "email": profile.email,
+            "phone": profile.phone,
+            "notes": profile.notes,
+        },
+    )
+    if created:
+        logger.info("Created AuditedPerson from InvestigationProfile: '{}'", profile.full_name)
+    return person
+
+
+@transaction.atomic
+def ensure_account_linked_to_person(account: BankAccount) -> BankAccount:
+    """
+    Ensures a bank account is linked to an AuditedPerson, creating a default one if absent.
+    """
+    if not account.person_id:
+        person, _ = AuditedPerson.objects.get_or_create(
+            full_name=account.account_holder or "Auditee Custodian",
+            defaults={"department": "General Auditee"},
+        )
+        account.person = person
+        account.save(update_fields=["person"])
+        logger.info("Linked BankAccount {} to AuditedPerson '{}'", account.id, person.full_name)
+    return account
+
+
+@transaction.atomic
 def ingest_bank_statement_file(
     *,
     file_obj_or_path: Any,

@@ -176,3 +176,42 @@ def get_verified_document_detail(doc_id: str | uuid.UUID) -> VerifiedDocument:
     Retrieves full details and raw metadata tree for a document.
     """
     return get_object_or_404(VerifiedDocument.objects.select_related("case"), id=doc_id)
+
+
+def get_case_risk_chart_html(risk_dist: dict[str, int]) -> str:
+    """
+    Renders the Plotly donut chart representing risk level distribution in a case.
+    """
+    import plotly.express as px
+
+    if not any(risk_dist.values()):
+        return ""
+
+    fig = px.pie(
+        names=list(risk_dist.keys()),
+        values=list(risk_dist.values()),
+        color=list(risk_dist.keys()),
+        color_discrete_map={
+            "Authentic": "#10b981",  # Emerald
+            "Suspicious": "#f59e0b",  # Amber
+            "High Risk / Tampered": "#f43f5e",  # Rose
+        },
+        hole=0.6,
+    )
+    fig.update_layout(
+        template="plotly_dark",
+        margin={"l": 10, "r": 10, "t": 10, "b": 10},
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font={"family": "Inter, sans-serif", "color": "#a1a1aa"},
+        showlegend=True,
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": -0.2,
+            "xanchor": "center",
+            "x": 0.5,
+        },
+        height=260,
+    )
+    return fig.to_html(full_html=False, include_plotlyjs=False)

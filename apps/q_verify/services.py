@@ -42,6 +42,62 @@ def create_verification_case(
 
 
 @transaction.atomic
+def create_verification_case_with_profile(
+    *,
+    case_ref: str,
+    case_title: str,
+    custodian_name: str = "",
+    custodian_email: str = "",
+    custodian_department: str = "",
+    notes: str = "",
+    profile_id: str | None = None,
+) -> VerificationCase:
+    """
+    Creates a new document verification case and ensures an InvestigationProfile is synced.
+    """
+    if profile_id:
+        try:
+            from core.models import InvestigationProfile
+
+            profile = InvestigationProfile.objects.filter(id=profile_id).first()
+            if profile:
+                custodian_name = profile.full_name
+                custodian_department = profile.department or custodian_department
+                custodian_email = profile.email or custodian_email
+        except Exception as exc:
+            logger.debug("Failed resolving profile_id in verification case: {}", exc)
+
+    case = create_verification_case(
+        case_ref=case_ref,
+        case_title=case_title,
+        custodian_name=custodian_name or "Target Auditee",
+        custodian_email=custodian_email,
+        custodian_department=custodian_department,
+        notes=notes,
+    )
+
+    try:
+        from core.models import InvestigationProfile
+        from core.profiles import create_investigation_profile
+
+        if (
+            custodian_name
+            and not InvestigationProfile.objects.filter(full_name__iexact=custodian_name).exists()
+        ):
+            create_investigation_profile(
+                full_name=custodian_name,
+                department=custodian_department,
+                email=custodian_email,
+                notes=notes,
+                avatar_color="rose",
+            )
+    except Exception as exc:
+        logger.debug("Optional profile sync in Q-Verify skipped: {}", exc)
+
+    return case
+
+
+@transaction.atomic
 def ingest_and_verify_document(
     *,
     file_bytes: bytes,

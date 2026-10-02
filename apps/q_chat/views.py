@@ -19,7 +19,7 @@ from .services import delete_chat_channel, ingest_chat_export_file
 
 
 @require_GET
-def chat_dashboard_view(request: HttpRequest) -> HttpResponse:
+def dashboard_view(request: HttpRequest) -> HttpResponse:
     """
     Main Q-Chat Instant Messaging Forensics Dashboard.
     """
@@ -91,6 +91,16 @@ def upload_chat_view(request: HttpRequest) -> HttpResponse:
     platform = request.POST.get("platform", "WHATSAPP").strip()
     channel_name = request.POST.get("channel_name", "").strip()
     custodian_name = request.POST.get("custodian_name", "").strip()
+
+    from core.profiles import resolve_or_create_profile_from_request
+
+    profile, resolved_name = resolve_or_create_profile_from_request(
+        request, default_department="Corporate Communications"
+    )
+    if profile:
+        custodian_name = profile.full_name
+    elif not custodian_name and resolved_name:
+        custodian_name = resolved_name
 
     try:
         channel = ingest_chat_export_file(

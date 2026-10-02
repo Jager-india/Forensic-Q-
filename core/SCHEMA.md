@@ -19,16 +19,23 @@ Table forensic_base_model {
   updated_at timestamp [default: `now()`, note: 'Last modification']
 }
 
-Table audit_sessions {
-  id uuid [pk, default: `uuid4()`]
-  session_token varchar(255) [not null, unique]
-  is_authenticated boolean [default: false]
-  ip_address varchar(45)
-  user_agent varchar(255)
+Table investigation_profiles {
+  id uuid [pk, note: 'UUID v4 Primary Key']
+  full_name varchar(255) [not null, note: 'Target / Auditee Full Name']
+  employee_id varchar(64) [default: '', note: 'Employee ID or Case Reference']
+  department varchar(128) [default: '', note: 'Department / Division']
+  designation varchar(128) [default: '', note: 'Designation / Position']
+  email varchar(254) [default: '']
+  phone varchar(32) [default: '']
+  status varchar(20) [default: 'ACTIVE', note: 'ACTIVE, MONITORING, CLEARED, FLAGGED']
+  risk_level varchar(20) [default: 'MEDIUM', note: 'LOW, MEDIUM, HIGH, CRITICAL']
+  notes text [default: '']
+  avatar_color varchar(32) [default: 'indigo']
   created_at timestamp [default: `now()`]
-  expires_at timestamp [not null]
+  updated_at timestamp [default: `now()`]
 }
 ```
+
 
 ---
 

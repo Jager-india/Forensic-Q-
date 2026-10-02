@@ -200,3 +200,34 @@ class QBankConfig(AppConfig):
 
 *Monochrome Rule:* Cards with `module_tag = "BUILDING"` automatically render in clean black-and-white monochrome styling on the landing page.
 *Grid Layout Rule:* If the total number of apps is not a multiple of 3, the final row automatically centers cards across the workstation grid.
+
+---
+
+## 8. Uniform Q-App Architecture & Terminology Standard (STRICT: NO Backward Compatibility Shims)
+
+All Q-Apps (`q_bank`, `q_mail`, `q_scan`, `q_verify`, `q_voice`, `q_chat`, `q_ledger`) must strictly adhere to identical naming conventions for code files, templates, URLs, and UI terminology. 
+
+**STRICT RULE:** **NO backward-compatibility shims allowed.** Do not create alias functions (`legacy_view = dashboard_view`), duplicate URL routes (`name="list"`, `name="landing"`), or legacy shim templates (`landing.html` including `dashboard.html`). Directly migrate all code to the uniform standard.
+
+### 1. Code Files Architecture Standard
+| Artifact Type | Standard Pattern | Example |
+| :--- | :--- | :--- |
+| **Main View Controller** | `def dashboard_view(request: HttpRequest) -> HttpResponse:` | In `views.py` across all apps |
+| **Main URL Route** | `path("", views.dashboard_view, name="dashboard")` | In `urls.py` across all apps |
+| **Main Hub Template** | `apps/<app_name>/templates/<app_name>/dashboard.html` | `q_mail/dashboard.html` |
+| **Detail View Controller** | `def <entity>_detail_view(request, ...)` | `person_detail_view`, `investigation_detail_view` |
+| **Detail URL Route** | `path("<entity>/<uuid:id>/", views.<entity>_detail_view, name="<entity>_detail")` | `name="investigation_detail"` |
+| **Detail Template** | `apps/<app_name>/templates/<app_name>/<entity>_detail.html` | `case_detail.html`, `channel_detail.html` |
+| **Service Layer** | `services.py` | Business workflows, writes, mutations |
+| **Selector Layer** | `selectors.py` | Read-only ORM queries with N+1 elimination |
+| **Data Models** | `models.py` | Declarative models inheriting `ForensicBaseModel` |
+
+### 2. UI & Design Terminology Standard
+| Component | Standard Terminology Pattern | Example |
+| :--- | :--- | :--- |
+| **Header Action Button** | `Import <Artifact Name>` | `Import Bank Statement`, `Import PST Mailbox`, `Import Scan Findings`, `New Verification Case`, `Import Audio Recording`, `Import Chat Export`, `Import SAP Records` |
+| **Directory Section Header** | `<Entities> Directory` | `Target Auditees Directory`, `Audited Mailboxes Directory`, `Audited Endpoints Directory`, `Verification Cases Directory`, `Voice Recordings Directory`, `Audited Chat Channels Directory` |
+| **Directory Search Bar** | `Search <entities> directory...` | Real-time Alpine filter, clear button, and `<N> Item(s) Configured` badge |
+| **Profile Selector** | `<c-profile_selector label="Target Auditee / Investigation Profile" name="profile_id" ... />` | Standardized auditee dropdown + inline creation across all upload modals |
+| **Profile Resolution** | `core.profiles.resolve_or_create_profile_from_request` | Automatically links or creates unified `InvestigationProfile` |
+

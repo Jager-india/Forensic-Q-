@@ -5,7 +5,7 @@ from . import views
 app_name = "q_scan"
 
 urlpatterns = [
-    path("", views.scan_dashboard_view, name="dashboard"),
+    path("", views.dashboard_view, name="dashboard"),
     path("upload/", views.upload_scan_csv_view, name="upload_csv"),
     path("hits/api/", views.evidence_hits_api_view, name="hits_api"),
     path("devices/<uuid:device_id>/", views.device_detail_view, name="device_detail"),

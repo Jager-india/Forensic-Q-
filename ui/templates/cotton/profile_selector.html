@@ -1,0 +1,206 @@
+<c-vars
+    label="Target Auditee / Investigation Profile"
+    name="profile_id"
+    new_name="new_profile_name"
+    new_dept="new_profile_dept"
+    new_role="new_profile_role"
+    required="true"
+    allow_new="true"
+/>
+
+<div x-data="{
+        mode: 'select',
+        isOpen: false,
+        selectedId: '{{ active_profile.id|default:'' }}',
+        selectedLabel: '{% if active_profile %}{{ active_profile.full_name }}{% if active_profile.department %} ({{ active_profile.department }}){% endif %}{% endif %}',
+        search: '',
+        newName: '',
+        newDept: '',
+        newRole: '',
+        profiles: [
+            {% for prof in investigation_profiles %}
+            {
+                id: '{{ prof.id }}',
+                name: '{{ prof.full_name|escapejs }}',
+                dept: '{{ prof.department|escapejs }}',
+                role: '{{ prof.designation|escapejs }}',
+                risk: '{{ prof.risk_level|escapejs }}',
+                initials: '{{ prof.initials|escapejs }}'
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ],
+        get filteredProfiles() {
+            if (!this.search.trim()) return this.profiles;
+            const q = this.search.toLowerCase();
+            return this.profiles.filter(p =>
+                p.name.toLowerCase().includes(q) ||
+                p.dept.toLowerCase().includes(q) ||
+                p.role.toLowerCase().includes(q)
+            );
+        },
+        selectProfile(p) {
+            this.selectedId = p.id;
+            this.selectedLabel = p.name + (p.dept ? ' • ' + p.dept : '');
+            this.isOpen = false;
+            this.search = '';
+        },
+        clearSelection() {
+            this.selectedId = '';
+            this.selectedLabel = '';
+        },
+        switchToNewWithSearch() {
+            this.mode = 'new';
+            this.newName = this.search.trim();
+            this.isOpen = false;
+        }
+    }"
+    class="space-y-2">
+
+    <!-- Header Row with Mode Toggle -->
+    <div class="flex items-center justify-between">
+        <label class="block text-xs font-semibold text-theme-text">
+            {{ label }}
+            {% if required %}<span class="text-rose-500">*</span>{% endif %}
+        </label>
+        {% if allow_new %}
+        <div class="flex items-center p-0.5 rounded-lg bg-theme-subtle border border-theme-border text-[11px]">
+            <button type="button" @click="mode = 'select'"
+                :class="mode === 'select' ? 'bg-amber-500 text-zinc-950 font-bold shadow-xs' : 'text-theme-muted hover:text-theme-text'"
+                class="px-2 py-0.5 rounded-md transition cursor-pointer flex items-center gap-1">
+                <i class="fa-solid fa-users text-[10px]"></i>
+                <span>Existing</span>
+            </button>
+            <button type="button" @click="mode = 'new'"
+                :class="mode === 'new' ? 'bg-amber-500 text-zinc-950 font-bold shadow-xs' : 'text-theme-muted hover:text-theme-text'"
+                class="px-2 py-0.5 rounded-md transition cursor-pointer flex items-center gap-1">
+                <i class="fa-solid fa-user-plus text-[10px]"></i>
+                <span>+ Create New</span>
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Hidden input to submit selected profile ID in standard form POST -->
+    <input type="hidden" :name="mode === 'select' ? '{{ name }}' : ''" :value="selectedId" />
+
+    <!-- Mode 1: Searchable Combobox Dropdown -->
+    <div x-show="mode === 'select'" class="space-y-1.5 relative" @click.outside="isOpen = false">
+        
+        <!-- Dropdown Trigger Button -->
+        <button type="button" @click="isOpen = !isOpen"
+            class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text hover:border-amber-500/60 focus:outline-none focus:border-amber-500 transition flex items-center justify-between cursor-pointer">
+            <span class="flex items-center gap-2 truncate">
+                <i class="fa-solid fa-user-shield text-[11px] text-amber-500 flex-shrink-0"></i>
+                <span x-text="selectedLabel || '-- Search &amp; Select Investigation Profile --'"
+                    :class="selectedLabel ? 'font-semibold text-theme-text' : 'text-theme-muted'"></span>
+            </span>
+            <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                <template x-if="selectedId">
+                    <span @click.stop="clearSelection()" class="text-theme-muted hover:text-rose-500 p-0.5 cursor-pointer" title="Clear selection">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </span>
+                </template>
+                <i class="fa-solid fa-chevron-down text-[10px] text-theme-muted transition-transform" :class="isOpen ? 'rotate-180' : ''"></i>
+            </div>
+        </button>
+
+        <!-- Searchable Floating Popover -->
+        <div x-show="isOpen" x-cloak
+            class="absolute top-full left-0 right-0 mt-1 rounded-2xl bg-theme-surface border border-theme-border shadow-2xl p-2 z-50 space-y-2">
+            
+            <!-- Real-time Filter Input -->
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass text-xs text-theme-muted absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" x-model="search" x-ref="searchInput"
+                    @keydown.escape="isOpen = false"
+                    placeholder="Search by auditee name, department, or title..."
+                    class="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+            </div>
+
+            <!-- Scrollable Profiles List -->
+            <div class="max-h-52 overflow-y-auto space-y-1">
+                <template x-for="p in filteredProfiles" :key="p.id">
+                    <button type="button" @click="selectProfile(p)"
+                        class="w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between text-xs hover:bg-theme-subtle transition cursor-pointer"
+                        :class="selectedId === p.id ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500 font-bold' : 'text-theme-text'">
+                        <div class="flex items-center gap-2 truncate">
+                            <span class="w-6 h-6 rounded-md bg-theme-app border border-theme-border flex items-center justify-center text-[10px] font-mono font-bold flex-shrink-0"
+                                x-text="p.initials"></span>
+                            <div class="truncate">
+                                <div class="truncate" x-text="p.name"></div>
+                                <div class="text-[10px] text-theme-muted truncate" x-show="p.dept" x-text="p.dept + (p.role ? ' • ' + p.role : '')"></div>
+                            </div>
+                        </div>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded font-mono uppercase bg-theme-app border border-theme-border flex-shrink-0 ml-2"
+                            x-text="p.risk"></span>
+                    </button>
+                </template>
+
+                <!-- No Results Fallback -->
+                <div x-show="filteredProfiles.length === 0" class="p-3 text-center text-xs text-theme-muted space-y-1.5">
+                    <div>No matching profiles found.</div>
+                    {% if allow_new %}
+                    <button type="button" @click="switchToNewWithSearch()"
+                        class="text-amber-500 hover:text-amber-400 font-bold text-xs underline cursor-pointer">
+                        + Register "<span x-text="search"></span>" as new profile
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between text-[11px] text-theme-muted px-1">
+            <span class="flex items-center gap-1.5">
+                <i class="fa-solid fa-arrows-rotate text-amber-500 text-[10px]"></i>
+                <span>Synced across all ForensiQ modules</span>
+            </span>
+            {% if allow_new %}
+            <button type="button" @click="mode = 'new'" class="text-amber-500 hover:text-amber-400 font-semibold cursor-pointer">
+                + Register New Profile
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Mode 2: Inline Create New Profile -->
+    <div x-show="mode === 'new'" x-cloak class="p-3 rounded-xl bg-theme-subtle/70 border border-amber-500/30 space-y-2.5">
+        <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>New Target Profile Registration</span>
+            </span>
+            <button type="button" @click="mode = 'select'" class="text-[11px] text-theme-muted hover:text-theme-text cursor-pointer">
+                Cancel
+            </button>
+        </div>
+
+        <div>
+            <label class="block text-[11px] font-medium text-theme-text mb-1">Target / Auditee Name *</label>
+            <input type="text" :name="mode === 'new' ? '{{ new_name }}' : ''"
+                x-model="newName"
+                placeholder="e.g. Ramesh Chandra"
+                class="w-full px-3 py-1.5 text-xs rounded-lg bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+            <div>
+                <label class="block text-[11px] font-medium text-theme-text mb-1">Department / Division</label>
+                <input type="text" :name="mode === 'new' ? '{{ new_dept }}' : ''"
+                    x-model="newDept"
+                    placeholder="e.g. Procurement / SCM"
+                    class="w-full px-3 py-1.5 text-xs rounded-lg bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+            </div>
+            <div>
+                <label class="block text-[11px] font-medium text-theme-text mb-1">Role / Designation</label>
+                <input type="text" :name="mode === 'new' ? '{{ new_role }}' : ''"
+                    x-model="newRole"
+                    placeholder="e.g. Assistant General Manager"
+                    class="w-full px-3 py-1.5 text-xs rounded-lg bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+            </div>
+        </div>
+        <p class="text-[10px] text-theme-muted">
+            <i class="fa-solid fa-circle-info text-amber-500"></i>
+            This profile will automatically sync and become available in Q-Bank, Q-Voice, Q-Verify, Q-Ledger, Q-Mail, and Q-Chat.
+        </p>
+    </div>
+</div>

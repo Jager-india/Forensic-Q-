@@ -31,12 +31,14 @@ from .services import (
     create_audited_person,
     delete_audited_person,
     delete_bank_account,
+    ensure_account_linked_to_person,
+    get_or_create_audited_person_from_profile,
     ingest_bank_statement_file,
 )
 
 
 @require_GET
-def bank_dashboard_view(request: HttpRequest) -> HttpResponse:
+def dashboard_view(request: HttpRequest) -> HttpResponse:
     """
     Main Q-Bank Forensic Financial Dashboard.
     Presents the Audited Persons Directory as the primary operational entry point.
@@ -134,16 +136,7 @@ def account_detail_view(request: HttpRequest, account_id: str) -> HttpResponse:
     if not account:
         raise Http404("Bank account audit record not found.")
 
-    if not account.person_id:
-        from .models import AuditedPerson
-
-        person, _ = AuditedPerson.objects.get_or_create(
-            full_name=account.account_holder or "Auditee Custodian",
-            defaults={"department": "General Auditee"},
-        )
-        account.person = person
-        account.save(update_fields=["person"])
-
+    account = ensure_account_linked_to_person(account)
     return redirect(f"/bank/person/{account.person_id}/?account_id={account.id}")
 
 
@@ -262,7 +255,20 @@ def upload_statement_view(request: HttpRequest) -> HttpResponse:
 
     uploaded_file = request.FILES["statement_file"]
     person_id = request.POST.get("person_id", "").strip() or None
-    account_holder = request.POST.get("account_holder", "").strip() or Path(uploaded_file.name).stem
+    account_holder = request.POST.get("account_holder", "").strip()
+
+    from core.profiles import resolve_or_create_profile_from_request
+
+    profile, resolved_name = resolve_or_create_profile_from_request(
+        request, default_department="Financial Audit"
+    )
+    if profile:
+        target_person = get_or_create_audited_person_from_profile(profile)
+        person_id = str(target_person.id)
+        account_holder = profile.full_name
+    elif not account_holder:
+        account_holder = Path(uploaded_file.name).stem
+
     bank_name = request.POST.get("bank_name", "").strip()
     statement_label = (
         request.POST.get("statement_label", "").strip() or "Bank Statement Investigation"
