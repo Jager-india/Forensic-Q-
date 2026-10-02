@@ -32,6 +32,11 @@ import django
 
 django.setup()
 
+from django.core.management import call_command
+
+# Automatically initialize and migrate database schema if running in clean environment/CI
+call_command("migrate", interactive=False, verbosity=0)
+
 from django.conf import settings  # noqa: E402
 from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: E402
 from django.test import Client  # noqa: E402

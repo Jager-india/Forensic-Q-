@@ -67,6 +67,10 @@ def main():
 
     # Step 2: Optionally run Master E2E suite under coverage append
     if args.include_e2e and not args.unit_only:
+        run_command(
+            ["uv", "run", "python", "manage.py", "migrate", "--noinput"],
+            "Initializing Database Schema for Workstation E2E Suite",
+        )
         e2e_ok = run_command(
             [
                 "uv",

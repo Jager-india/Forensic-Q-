@@ -65,6 +65,15 @@ jobs:
       - name: Install Dependencies
         run: uv sync --frozen
 
+      - name: Initialize SQLite Database Schema
+        env:
+          SECRET_KEY: ci-test-secret-key-for-automated-coverage-12345
+          PORTAL_ACCESS_PASSWORD: forensiq2026
+          DEBUG: "True"
+          ALLOWED_HOSTS: "127.0.0.1,localhost,testserver"
+        run: |
+          uv run python manage.py migrate --noinput
+
       - name: Execute Test Suite with Coverage Enforced
         env:
           SECRET_KEY: ci-test-secret-key-for-automated-coverage-12345
