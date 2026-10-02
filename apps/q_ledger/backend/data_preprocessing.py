@@ -70,14 +70,16 @@ def dfmain(main_df: pd.DataFrame, df2: pd.DataFrame):
     Enriches PR/PO dataframe with MARA, G/L master, and SLoc master data stored in background.
     """
     logger.info("Enriching Q-Ledger PR/PO dataframe with background GL and SLoc masters")
-    main_df = main_df.copy()
+    main_df = main_df.loc[:, ~main_df.columns.duplicated()].copy()
     main_df["year"] = pd.to_datetime(main_df["PO Date"], errors="coerce").dt.year
     main_df = pd.merge(main_df, df2[["Material", "Material Type"]], on="Material", how="left")
+    main_df = main_df.loc[:, ~main_df.columns.duplicated()].copy()
 
     # 1. Merge G/L Account Master Data from background store
     gl_data = get_master_gl_data()
     if not gl_data.empty:
         main_df = pd.merge(main_df, gl_data, left_on="G/L acct", right_on="G/L acct", how="left")
+        main_df = main_df.loc[:, ~main_df.columns.duplicated()].copy()
     else:
         main_df["G/L Acct Long Text_x"] = "N/A"
 

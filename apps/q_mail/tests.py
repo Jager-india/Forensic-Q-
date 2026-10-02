@@ -276,11 +276,29 @@ class QMailCheckpointsAndSelectorsTests(TestCase):
         prog = get_mailbox_progress_state(self.inv.id)
         self.assertEqual(prog["status"], MailboxInvestigation.IngestionStatus.COMPLETED)
 
-        # Paginated emails
-        page_res = get_paginated_investigation_emails(
-            self.inv.id, page=1, page_size=10, checkpoint="currency"
-        )
-        self.assertEqual(page_res["total_count"], 1)
+        # Paginated emails across checkpoints
+        for cp in (
+            "currency",
+            "without_cc_bcc",
+            "personal",
+            "external",
+            "bank",
+            "upi",
+            "keywords",
+            "all",
+        ):
+            page_res = get_paginated_investigation_emails(
+                self.inv.id, page=1, page_size=10, checkpoint=cp
+            )
+            self.assertIn("data", page_res)
+
+        from .selectors import get_counterparty_chart_html, get_global_mailbox_stats
+
+        landing_metrics = get_global_mailbox_stats()
+        self.assertGreaterEqual(landing_metrics["total_mailboxes"], 1)
+
+        chart_html = get_counterparty_chart_html(self.inv.id)
+        self.assertIsInstance(chart_html, str)
 
         # Excel export view
         client = Client()

@@ -235,6 +235,20 @@ class HighPerformanceDiskScannerTests(TestCase):
             "PB", HighPerformanceDiskScanner.format_file_size(2000 * 1024 * 1024 * 1024 * 1024)
         )
 
+    def test_clean_display_path(self):
+        self.assertEqual(
+            HighPerformanceDiskScanner.clean_display_path("\\\\?\\UNC\\server\\share\\folder"),
+            "\\\\server\\share\\folder",
+        )
+        self.assertEqual(
+            HighPerformanceDiskScanner.clean_display_path("\\\\?\\C:\\Folder\\File.txt"),
+            "C:\\Folder\\File.txt",
+        )
+        self.assertEqual(
+            HighPerformanceDiskScanner.clean_display_path("C:\\Normal\\Path.txt"),
+            "C:\\Normal\\Path.txt",
+        )
+
     def test_deep_xlsx_and_pptx_inspection(self):
         # Create mock .xlsx
         xlsx_file = self.root_path / "accounts.xlsx"

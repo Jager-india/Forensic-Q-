@@ -144,7 +144,20 @@ class HighPerformanceDiskScanner:
             if exclude_directories is not None
             else self.DEFAULT_EXCLUDE_DIRECTORIES
         )
-        self.exclude_directories = [d.strip().lower() for d in raw_exclude_dirs if d.strip()]
+        self.exclude_directories = []
+        for d in raw_exclude_dirs:
+            d_str = str(d).strip()
+            if not d_str:
+                continue
+            self.exclude_directories.append(d_str.lower())
+            try:
+                p = Path(d_str)
+                if p.is_absolute() or p.exists():
+                    resolved = str(p.resolve()).lower()
+                    if resolved not in self.exclude_directories:
+                        self.exclude_directories.append(resolved)
+            except (OSError, ValueError):
+                continue
 
         raw_exclude_exts = (
             exclude_extensions
@@ -210,11 +223,36 @@ class HighPerformanceDiskScanner:
             if norm_dir == os.path.normpath(self.clean_display_path(target).lower()):
                 return False
 
+        try:
+            resolved_dir = str(Path(norm_dir).resolve()).lower()
+        except Exception:
+            resolved_dir = norm_dir
+
+        path_parts = {part.lower() for part in Path(norm_dir).parts} | {
+            part.lower() for part in Path(resolved_dir).parts
+        }
+
         for exc in self.exclude_directories:
             exc_norm = os.path.normpath(exc)
-            if norm_dir == exc_norm or norm_dir.startswith(exc_norm + os.sep):
+            try:
+                exc_resolved = str(Path(exc_norm).resolve()).lower()
+            except Exception:
+                exc_resolved = exc_norm
+
+            if (
+                norm_dir == exc_norm
+                or norm_dir.startswith(exc_norm + os.sep)
+                or resolved_dir == exc_resolved
+                or resolved_dir.startswith(exc_resolved + os.sep)
+            ):
                 return True
-            if (os.sep + exc_norm + os.sep) in (os.sep + norm_dir + os.sep):
+
+            if (os.sep + exc_norm + os.sep) in (os.sep + norm_dir + os.sep) or (
+                os.sep + exc_resolved + os.sep
+            ) in (os.sep + resolved_dir + os.sep):
+                return True
+
+            if exc_norm in path_parts or exc_resolved in path_parts:
                 return True
 
         return False

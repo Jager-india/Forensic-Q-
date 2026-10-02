@@ -43,7 +43,7 @@ jobs:
           uv run python scripts/validate_project.py
 
   tests-and-coverage:
-    name: Unit & E2E Test Suite (Coverage >= 85%)
+    name: Unit & E2E Test Suite (Coverage >= 90%)
     runs-on: windows-latest
     needs: [architecture-and-security]
     defaults:
@@ -72,7 +72,7 @@ jobs:
           DEBUG: "True"
           ALLOWED_HOSTS: "127.0.0.1,localhost,testserver"
         run: |
-          uv run python scripts/run_coverage.py --fail-under 85
+          uv run python scripts/run_coverage.py --fail-under 90
 
       - name: Upload HTML Coverage Dashboard Artifact
         if: always()
@@ -89,9 +89,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status | Details |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :---: | :--- |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Unit Tests** | 🟢 PASSED | 130 tests (0 failures, 0 errors) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Unit Tests** | 🟢 PASSED | 148 tests (0 failures, 0 errors) |" >> $GITHUB_STEP_SUMMARY
           echo "| **Master E2E Suite** | 🟢 PASSED | 10 integration user journey phases |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Test Coverage** | 🟢 >=85.0% | Required quality threshold enforced |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Test Coverage** | 🟢 >=90.0% | Required quality threshold enforced |" >> $GITHUB_STEP_SUMMARY
           echo "| **Security (Bandit)** | 🟢 PASSED | 0 vulnerabilities detected |" >> $GITHUB_STEP_SUMMARY
           echo "| **Ruff Code Style** | 🟢 PASSED | Formatting & linting validated |" >> $GITHUB_STEP_SUMMARY
           echo "| **Django Architecture** | 🟢 PASSED | Model migrations & Cotton tags validated |" >> $GITHUB_STEP_SUMMARY

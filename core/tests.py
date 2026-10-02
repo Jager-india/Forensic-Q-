@@ -1,16 +1,18 @@
 import hashlib
+import json
 import logging
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from django.conf import settings
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 
 from core.db import configure_database_connection
 from core.file_uploader import FileUploader
 from core.logging import InterceptHandler, setup_logging
+from core.models import InvestigationProfile
 from core.modules import get_discovered_modules
 
 
@@ -61,6 +63,29 @@ class CoreFileUploaderTests(TestCase):
         self.assertTrue(res3["is_completed"])
         self.assertEqual(res3["file_sha256"], expected_sha)
         self.assertEqual(res3["current_size_bytes"], len(full_data))
+
+    def test_extension_normalization_and_chunk0_overwrite(self):
+        res1 = self.uploader.append_chunk(
+            upload_id="no_dot_ext",
+            chunk_index=0,
+            total_chunks=1,
+            chunk_data=b"Initial",
+            extension="dat",
+        )
+        self.assertTrue(res1["is_completed"])
+        target = Path(res1["file_path"])
+        self.assertTrue(target.exists())
+        self.assertEqual(target.suffix, ".dat")
+
+        res2 = self.uploader.append_chunk(
+            upload_id="no_dot_ext",
+            chunk_index=0,
+            total_chunks=1,
+            chunk_data=b"Overwritten",
+            extension=".dat",
+        )
+        self.assertTrue(res2["is_completed"])
+        self.assertEqual(target.read_bytes(), b"Overwritten")
 
 
 class CorePortalAuthMiddlewareAndViewsTests(TestCase):
@@ -230,3 +255,274 @@ class CoreLoggingAndDatabaseTests(TestCase):
         mock_err_conn.vendor = "sqlite"
         mock_err_conn.cursor.side_effect = RuntimeError("Pragma lock error")
         configure_database_connection(sender=None, connection=mock_err_conn)
+
+
+class CoreInvestigationProfilesTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.profile = InvestigationProfile.objects.create(
+            full_name="Target Custodian A",
+            employee_id="EMP-1001",
+            department="Procurement",
+            designation="Manager",
+            email="custodian.a@example.com",
+            phone="+91 9876543210",
+            risk_level="HIGH",
+            status="ACTIVE",
+            notes="Under observation",
+            avatar_color="orange",
+        )
+
+    def test_get_all_profiles(self):
+        from core.profiles import get_all_profiles
+
+        profiles = get_all_profiles()
+        self.assertGreaterEqual(len(profiles), 1)
+        self.assertEqual(profiles.first().full_name, "Target Custodian A")
+
+    def test_get_profile_by_id(self):
+        from core.profiles import get_profile_by_id
+
+        self.assertIsNone(get_profile_by_id(None))
+        self.assertIsNone(get_profile_by_id("invalid-uuid"))
+        found = get_profile_by_id(self.profile.id)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, self.profile.id)
+
+    def test_get_and_set_active_profile(self):
+        from core.profiles import get_active_profile, set_active_profile
+
+        request = self.factory.get("/")
+        request.session = {}
+
+        # Initially none
+        self.assertIsNone(get_active_profile(request))
+
+        # Set active
+        active = set_active_profile(request, self.profile.id)
+        self.assertIsNotNone(active)
+        self.assertEqual(request.session.get("active_profile_id"), str(self.profile.id))
+        self.assertEqual(get_active_profile(request).id, self.profile.id)
+
+        # Clear active
+        cleared = set_active_profile(request, None)
+        self.assertIsNone(cleared)
+        self.assertNotIn("active_profile_id", request.session)
+
+    def test_create_investigation_profile(self):
+        from core.profiles import create_investigation_profile
+
+        with self.assertRaises(ValueError):
+            create_investigation_profile(full_name="   ")
+
+        p = create_investigation_profile(
+            full_name="New Auditee B",
+            employee_id="EMP-2002",
+            department="Finance",
+            risk_level="INVALID_RISK",  # invalid choice falls back to MEDIUM
+            status="INVALID",  # invalid choice falls back to ACTIVE
+        )
+        self.assertEqual(p.full_name, "New Auditee B")
+        self.assertEqual(p.risk_level, "MEDIUM")
+        self.assertEqual(p.status, "ACTIVE")
+
+    def test_resolve_or_create_profile_from_request(self):
+        from core.profiles import resolve_or_create_profile_from_request, set_active_profile
+
+        # 1. Existing Profile Selected
+        req1 = self.factory.post("/", {"profile_id": str(self.profile.id)})
+        req1.session = {}
+        prof, name = resolve_or_create_profile_from_request(req1)
+        self.assertEqual(prof.id, self.profile.id)
+        self.assertEqual(name, self.profile.full_name)
+
+        # 2. Inline New Profile
+        req2 = self.factory.post(
+            "/",
+            {
+                "new_profile_name": "Inline Person",
+                "new_profile_dept": "IT",
+                "new_profile_role": "Admin",
+            },
+        )
+        req2.session = {}
+        prof2, name2 = resolve_or_create_profile_from_request(req2)
+        self.assertEqual(prof2.full_name, "Inline Person")
+        self.assertEqual(name2, "Inline Person")
+
+        # 2b. Inline Profile that already exists
+        req2b = self.factory.post("/", {"new_profile_name": self.profile.full_name})
+        req2b.session = {}
+        prof2b, name2b = resolve_or_create_profile_from_request(req2b)
+        self.assertEqual(prof2b.id, self.profile.id)
+
+        # 3. Legacy Name Fallback
+        req3 = self.factory.post("/", {"custodian_name": "Legacy Target"})
+        req3.session = {}
+        prof3, name3 = resolve_or_create_profile_from_request(req3, default_department="Logistics")
+        self.assertEqual(prof3.full_name, "Legacy Target")
+        self.assertEqual(prof3.department, "Logistics")
+
+        # 3b. Legacy Name that already exists
+        req3b = self.factory.post("/", {"account_holder": self.profile.full_name})
+        req3b.session = {}
+        prof3b, name3b = resolve_or_create_profile_from_request(req3b)
+        self.assertEqual(prof3b.id, self.profile.id)
+
+        # 4. Fallback to active session profile
+        req4 = self.factory.post("/", {})
+        req4.session = {}
+        set_active_profile(req4, self.profile.id)
+        prof4, name4 = resolve_or_create_profile_from_request(req4)
+        self.assertEqual(prof4.id, self.profile.id)
+
+        # 5. Empty
+        req5 = self.factory.post("/", {})
+        req5.session = {}
+        prof5, name5 = resolve_or_create_profile_from_request(req5)
+        self.assertIsNone(prof5)
+        self.assertEqual(name5, "")
+
+    def test_sync_all_existing_entities_to_profiles(self):
+        from django.utils import timezone
+        from q_bank.models import AuditedPerson
+        from q_verify.models import VerificationCase
+        from q_voice.models import AudioRecording
+
+        from core.profiles import sync_all_existing_entities_to_profiles
+
+        AuditedPerson.objects.create(full_name="Synced Bank Auditee", notes="flagged transaction")
+        AudioRecording.objects.create(
+            call_ref="CALL-SYNC-001",
+            call_title="Synchronized Wiretap",
+            call_timestamp=timezone.now(),
+            custodian_name="Synced Voice Subject",
+            risk_score=85,
+        )
+        VerificationCase.objects.create(
+            custodian_name="Synced Verify Subject", custodian_department="HR"
+        )
+
+        created = sync_all_existing_entities_to_profiles()
+        self.assertGreaterEqual(created, 3)
+
+
+class CoreProfileViewsTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        session = self.client.session
+        session["portal_authenticated"] = True
+        session.save()
+
+        self.profile = InvestigationProfile.objects.create(
+            full_name="Target Person X",
+            employee_id="EMP-9009",
+            department="Operations",
+        )
+
+    def test_create_profile_view_json(self):
+        res = self.client.post(
+            reverse("create_profile"),
+            data=json.dumps({"full_name": "AJAX Created Person", "department": "Legal"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["profile"]["full_name"], "AJAX Created Person")
+
+    def test_create_profile_view_json_empty_name(self):
+        res = self.client.post(
+            reverse("create_profile"),
+            data=json.dumps({"full_name": "  "}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400)
+        data = res.json()
+        self.assertEqual(data["status"], "error")
+
+    def test_create_profile_view_form(self):
+        res = self.client.post(
+            reverse("create_profile"),
+            data={"full_name": "Form Created Person", "department": "Audit"},
+        )
+        self.assertEqual(res.status_code, 302)
+        self.assertTrue(
+            InvestigationProfile.objects.filter(full_name="Form Created Person").exists()
+        )
+
+    def test_set_active_profile_view_json(self):
+        # Set active
+        res1 = self.client.post(
+            reverse("set_active_profile"),
+            data=json.dumps({"profile_id": str(self.profile.id)}),
+            content_type="application/json",
+        )
+        self.assertEqual(res1.status_code, 200)
+        self.assertEqual(res1.json()["active_profile"]["id"], str(self.profile.id))
+
+        # Clear active
+        res2 = self.client.post(
+            reverse("set_active_profile"),
+            data=json.dumps({"profile_id": ""}),
+            content_type="application/json",
+        )
+        self.assertEqual(res2.status_code, 200)
+        self.assertIsNone(res2.json()["active_profile"])
+
+    def test_create_profile_view_form_empty(self):
+        res = self.client.post(
+            reverse("create_profile"),
+            data={"full_name": ""},
+        )
+        self.assertEqual(res.status_code, 302)
+
+    def test_set_active_profile_view_form(self):
+        res = self.client.post(
+            reverse("set_active_profile"),
+            data={"profile_id": str(self.profile.id)},
+        )
+        self.assertEqual(res.status_code, 302)
+
+    def test_profile_list_api_view(self):
+        res = self.client.get(reverse("api_profiles"))
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        self.assertGreaterEqual(len(data["profiles"]), 1)
+
+    def test_create_profile_view_malformed_json(self):
+        res = self.client.post(
+            reverse("create_profile"),
+            data=b"invalid-json{",
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_set_active_profile_view_malformed_json(self):
+        res = self.client.post(
+            reverse("set_active_profile"),
+            data=b"invalid-json{",
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 200)
+
+    def test_set_active_profile_invalid_id(self):
+        from core.profiles import set_active_profile
+
+        request = RequestFactory().post("/")
+        request.session = {}
+        result = set_active_profile(request, "00000000-0000-0000-0000-000000000000")
+        self.assertIsNone(result)
+
+    def test_context_processor_error_fallback(self):
+        from core.context_processors import global_profiles_context
+
+        request = RequestFactory().get("/")
+        request.session = {}
+        with patch(
+            "core.context_processors.get_all_profiles", side_effect=RuntimeError("DB offline")
+        ):
+            ctx = global_profiles_context(request)
+            self.assertEqual(ctx["investigation_profiles"], [])
+            self.assertEqual(ctx["total_profiles_count"], 0)

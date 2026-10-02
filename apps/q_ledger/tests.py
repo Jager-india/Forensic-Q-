@@ -100,6 +100,68 @@ class QLedgerSelectorAndAnalysisTests(TestCase):
         self.assertEqual(result["rows"][0]["Date"], "2026-03-15")
         self.assertEqual(result["rows"][0]["Notes"], "—")
 
+    def test_get_checkpoint_tables_and_charts_execution(self):
+        from .selectors import (
+            get_checkpoint_tables,
+            get_ledger_charts,
+            get_ledger_kpis,
+            get_top_rankings,
+        )
+
+        # 1. Empty input
+        empty_tables = get_checkpoint_tables(None, None)
+        self.assertIn("checkpoint_material", empty_tables)
+
+        empty_charts = get_ledger_charts(None)
+        self.assertIsNone(empty_charts["vendor_chart_html"])
+
+        # 2. Rich dataset input
+        sample_df = pd.DataFrame(
+            {
+                "S/Loc": ["SL01", "SL01"],
+                "Vendor": ["V-101", "V-101"],
+                "Vendor Code & Name": ["V-101 Supplier", "V-101 Supplier"],
+                "Creater": ["USER1", "USER1"],
+                "Material": ["M-9901", "M-9901"],
+                "Material Type": ["ERSA", "ERSA"],
+                "Material Type.": ["ERSA", "ERSA"],
+                "Material Type Description": ["Raw Material", "Raw Material"],
+                "Description": ["High tensile steel coil", "High tensile steel coil"],
+                "Spec": ["IS 2062", "IS 2062"],
+                "G/L acct": ["410001", "410001"],
+                "G/L acct.": ["410001", "410001"],
+                "G/L Acct Long Text": ["Raw material", "Raw material"],
+                "Cost Ctr": ["CC-01", "CC-01"],
+                "Cost Ctr.": ["CC-01", "CC-01"],
+                "PO Date": ["2022-01-01", "2024-01-01"],
+                "Purchase order": ["PO-1001", "PO-1001"],
+                "PO Currency": ["INR", "INR"],
+                "Net price": [5000, 5000],
+                "PO Qty": [100, 100],
+                "Pstng Date": ["2023-01-01", "2024-06-01"],
+                "GR Qty": [80, 80],
+                "PO Rem": [20, 20],
+                "PO Rem.": [20, 20],
+                "Amount LC": [400000, 400000],
+            }
+        )
+        sample_df2 = pd.DataFrame({"Material": ["M-9901"], "Material Type": ["ERSA"]})
+
+        tables = get_checkpoint_tables(sample_df, sample_df2)
+        self.assertIn("checkpoint_material", tables)
+        self.assertIn("checkpoint_ersa", tables)
+        self.assertIn("checkpoint_openpo", tables)
+        self.assertIn("checkpoint_unitprice", tables)
+
+        charts = get_ledger_charts(sample_df)
+        self.assertIsInstance(charts, dict)
+
+        kpis = get_ledger_kpis(sample_df)
+        self.assertGreater(kpis["total_amount_raw"], 0)
+
+        rankings = get_top_rankings(sample_df)
+        self.assertIn("top_vendors", rankings)
+
     def test_indian_rupee_format(self):
         formatted = indian_rupee_format(150000)
         self.assertIn("1.50 L", formatted)
@@ -693,3 +755,86 @@ class QLedgerDataPreprocessingTests(TestCase):
 
         enriched_with_sloc, _ = dfmain(main_df, mara_df)
         self.assertIn("Warehouse Alpha", enriched_with_sloc.iloc[0]["S/Loc."])
+
+
+class QLedgerServicesTests(TestCase):
+    def test_ingest_master_files_with_real_excel(self):
+        from .services import ensure_masters_initialized, ingest_master_files, reset_ledger_cache
+
+        gl_buf = io.BytesIO()
+        pd.DataFrame(
+            {"G/L acct": [410001, 410002], "G/L Acct Long Text": ["Raw Material", "Packaging"]}
+        ).to_excel(gl_buf, index=False)
+        gl_buf.seek(0)
+        f_gl = SimpleUploadedFile(
+            "valid_gl.xlsx", gl_buf.getvalue(), content_type="application/vnd.ms-excel"
+        )
+
+        sloc_buf = io.BytesIO()
+        pd.DataFrame(
+            {"S/Loc": ["SL01", "SL02"], "S/loc Description": ["Plant Store", "Warehouse"]}
+        ).to_excel(sloc_buf, index=False)
+        sloc_buf.seek(0)
+        f_sloc = SimpleUploadedFile(
+            "valid_sloc.xlsx", sloc_buf.getvalue(), content_type="application/vnd.ms-excel"
+        )
+
+        gl_cnt, sloc_cnt = ingest_master_files(gl_file=f_gl, sloc_file=f_sloc)
+        self.assertEqual(gl_cnt, 2)
+        self.assertEqual(sloc_cnt, 2)
+
+        config = ensure_masters_initialized()
+        self.assertEqual(config.gl_account_count, 2)
+        self.assertEqual(config.sloc_count, 2)
+
+        reset_ledger_cache()
+
+    def test_ingest_ledger_datasets_with_real_excel(self):
+        from .services import ingest_ledger_datasets
+
+        # Empty prpo returns None, 0
+        df_none, cnt_zero = ingest_ledger_datasets(prpo_files=[])
+        self.assertIsNone(df_none)
+        self.assertEqual(cnt_zero, 0)
+
+        prpo_buf = io.BytesIO()
+        pd.DataFrame(
+            {
+                "S/Loc": ["SL01"],
+                "Supplier": ["V-99"],
+                "Name 1": ["Seed Supplier"],
+                "Creater": ["USER_01"],
+                "Material": ["M-99"],
+                "Description": ["Component Part"],
+                "Spec": ["IS 2062"],
+                "Unit": ["EA"],
+                "G/L Acct": [410001],
+                "Cost Ctr": ["CC-01"],
+                "PO Date": ["2026-02-01"],
+                "Purchase order": ["PO-9901"],
+                "PO Currency": ["INR"],
+                "Net price": [1000.0],
+                "PO Qty": [20],
+                "Pstng Date": ["2026-02-10"],
+                "GR Qty": [15],
+                "Amount LC": [15000.0],
+            }
+        ).to_excel(prpo_buf, index=False)
+        prpo_buf.seek(0)
+        f_prpo = SimpleUploadedFile(
+            "prpo_valid.xlsx", prpo_buf.getvalue(), content_type="application/vnd.ms-excel"
+        )
+
+        # Ingest with mara_files=None -> exercises fallback MARA generation
+        df, count = ingest_ledger_datasets(prpo_files=[f_prpo], mara_files=None)
+        self.assertIsNotNone(df)
+        self.assertEqual(count, 1)
+
+    def test_ingest_master_files_sloc_error(self):
+        from .services import ingest_master_files
+
+        bad_file = SimpleUploadedFile(
+            "corrupt_sloc.xlsx", b"not-an-excel", content_type="application/vnd.ms-excel"
+        )
+        with self.assertRaises(ValueError):
+            ingest_master_files(sloc_file=bad_file)

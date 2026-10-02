@@ -283,3 +283,19 @@ class QChatForensicTests(TestCase):
         # Message 4: real contact notice
         self.assertEqual(msgs[3]["sender_name"], "System")
         self.assertTrue(msgs[3]["is_system"])
+
+    def test_filtered_chat_messages(self):
+        pag_search = get_paginated_chat_messages(self.channel.id, search="quote")
+        self.assertEqual(pag_search["total_count"], 1)
+
+        pag_sender = get_paginated_chat_messages(self.channel.id, sender="Rajesh M")
+        self.assertEqual(pag_sender["total_count"], 2)
+
+        pag_flagged = get_paginated_chat_messages(self.channel.id, flagged_only=True)
+        self.assertGreaterEqual(pag_flagged["total_count"], 1)
+
+        pag_media = get_paginated_chat_messages(self.channel.id, media_only=True)
+        self.assertEqual(pag_media["total_count"], 1)
+
+        pag_deleted = get_paginated_chat_messages(self.channel.id, deleted_only=True)
+        self.assertEqual(pag_deleted["total_count"], 1)

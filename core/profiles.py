@@ -5,6 +5,7 @@ Provides unified profile management, cross-app profile resolution, and synchroni
 
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
 from django.http import HttpRequest
 from loguru import logger
@@ -27,7 +28,7 @@ def get_profile_by_id(profile_id: str | uuid.UUID | None) -> InvestigationProfil
         return None
     try:
         return InvestigationProfile.objects.filter(id=profile_id).first()
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, ValidationError):
         return None
 
 
@@ -51,14 +52,16 @@ def set_active_profile(
     """
     if not profile_id:
         request.session.pop("active_profile_id", None)
-        request.session.modified = True
+        if hasattr(request.session, "modified"):
+            request.session.modified = True
         return None
 
     profile = get_profile_by_id(profile_id)
     if profile:
         request.session["active_profile_id"] = str(profile.id)
         request.session["active_profile_name"] = profile.full_name
-        request.session.modified = True
+        if hasattr(request.session, "modified"):
+            request.session.modified = True
         return profile
 
     return None
@@ -145,7 +148,8 @@ def resolve_or_create_profile_from_request(
             # Set as active session profile
             request.session["active_profile_id"] = str(profile.id)
             request.session["active_profile_name"] = profile.full_name
-            request.session.modified = True
+            if hasattr(request.session, "modified"):
+                request.session.modified = True
             return profile, profile.full_name
 
     # 2. Inline New Profile Submitted
@@ -153,7 +157,8 @@ def resolve_or_create_profile_from_request(
         existing = InvestigationProfile.objects.filter(full_name__iexact=new_profile_name).first()
         if existing:
             request.session["active_profile_id"] = str(existing.id)
-            request.session.modified = True
+            if hasattr(request.session, "modified"):
+                request.session.modified = True
             return existing, existing.full_name
 
         profile = create_investigation_profile(
@@ -162,7 +167,8 @@ def resolve_or_create_profile_from_request(
             designation=new_profile_role,
         )
         request.session["active_profile_id"] = str(profile.id)
-        request.session.modified = True
+        if hasattr(request.session, "modified"):
+            request.session.modified = True
         return profile, profile.full_name
 
     # 3. Fallback standard custodian input (e.g. custodian_name or account_holder)
