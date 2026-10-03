@@ -378,15 +378,12 @@ def extract_statement_period(df: pd.DataFrame) -> str:
                 raw_s = str(val).strip()
                 if not raw_s or raw_s.lower() in ["0", "nan", "none", "—", "-"]:
                     continue
-                try:
-                    if re.match(r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}", raw_s):
-                        dt = pd.to_datetime(raw_s, dayfirst=False, errors="coerce")
-                    else:
-                        dt = pd.to_datetime(raw_s, dayfirst=True, errors="coerce")
-                    if pd.notna(dt):
-                        dates.append(dt)
-                except Exception:
-                    continue
+                if re.match(r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}", raw_s):
+                    dt = pd.to_datetime(raw_s, dayfirst=False, errors="coerce")
+                else:
+                    dt = pd.to_datetime(raw_s, dayfirst=True, errors="coerce")
+                if pd.notna(dt):
+                    dates.append(dt)
 
     if not dates:
         return ""
@@ -401,4 +398,3 @@ def extract_statement_period(df: pd.DataFrame) -> str:
     if min_date == max_date:
         return min_date.strftime(fmt)
     return f"{min_date.strftime(fmt)} - {max_date.strftime(fmt)}"
-
