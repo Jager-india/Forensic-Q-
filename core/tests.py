@@ -2,10 +2,12 @@ import hashlib
 import json
 import logging
 import tempfile
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 
@@ -526,3 +528,189 @@ class CoreProfileViewsTests(TestCase):
             ctx = global_profiles_context(request)
             self.assertEqual(ctx["investigation_profiles"], [])
             self.assertEqual(ctx["total_profiles_count"], 0)
+
+    def test_create_profile_with_keywords(self):
+        from core.profiles import create_investigation_profile
+
+        prof = create_investigation_profile(
+            full_name="Keyword Subject",
+            department="Risk & Audit",
+            keywords=["Kickback", "commission", "KICKBACK", "off-book"],
+        )
+        self.assertEqual(prof.keywords, ["Kickback", "commission", "off-book"])
+        self.assertIn("keywords", prof.to_dict())
+
+    def test_add_keywords_to_profile(self):
+        from core.profiles import add_keywords_to_profile, create_investigation_profile
+
+        prof = create_investigation_profile(
+            full_name="Surveillance Target",
+            keywords=["bribe"],
+        )
+        updated = add_keywords_to_profile(prof.id, "cash, gift, bribe, secret")
+        self.assertEqual(updated.keywords, ["bribe", "cash", "gift", "secret"])
+
+    def test_add_keywords_to_profile_not_found(self):
+        from core.profiles import add_keywords_to_profile
+
+        with self.assertRaises(ValueError):
+            add_keywords_to_profile(uuid.uuid4(), "audit")
+
+    def test_create_profile_view_with_keywords_json(self):
+        res = self.client.post(
+            reverse("create_profile"),
+            data=json.dumps(
+                {
+                    "full_name": "Profile With Keywords",
+                    "department": "Security",
+                    "keywords": ["shell_company", "wire_transfer"],
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["profile"]["keywords"], ["shell_company", "wire_transfer"])
+
+    def test_create_profile_view_with_keywords_form(self):
+        res = self.client.post(
+            reverse("create_profile"),
+            data={
+                "full_name": "Form Profile Keywords",
+                "department": "Procurement",
+                "keywords": json.dumps(["cash_payment", "hawala"]),
+            },
+        )
+        self.assertEqual(res.status_code, 302)
+        prof = InvestigationProfile.objects.filter(full_name="Form Profile Keywords").first()
+        self.assertIsNotNone(prof)
+        self.assertEqual(prof.keywords, ["cash_payment", "hawala"])
+
+    def test_add_profile_keywords_view_success(self):
+        url = reverse("add_profile_keywords", kwargs={"profile_id": str(self.profile.id)})
+        res = self.client.post(
+            url,
+            data=json.dumps({"keywords": "fraud, evasion"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("fraud", data["profile"]["keywords"])
+        self.assertIn("evasion", data["profile"]["keywords"])
+
+    def test_add_profile_keywords_view_empty(self):
+        url = reverse("add_profile_keywords", kwargs={"profile_id": str(self.profile.id)})
+        res = self.client.post(
+            url,
+            data=json.dumps({"keywords": ""}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_add_profile_keywords_view_not_found(self):
+        url = reverse("add_profile_keywords", kwargs={"profile_id": str(uuid.uuid4())})
+        res = self.client.post(
+            url,
+            data=json.dumps({"keywords": "audit"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_parse_keywords_file_view_txt_success(self):
+        txt_content = b"kickback, bribe\nconsulting fee\toff-book;secret commission"
+        uploaded_file = SimpleUploadedFile("terms.txt", txt_content, content_type="text/plain")
+        res = self.client.post(
+            reverse("parse_keywords_file"),
+            {"file": uploaded_file},
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("kickback", data["keywords"])
+        self.assertIn("bribe", data["keywords"])
+        self.assertIn("consulting fee", data["keywords"])
+        self.assertIn("off-book", data["keywords"])
+        self.assertIn("secret commission", data["keywords"])
+
+    def test_parse_keywords_file_view_xlsx_success(self):
+        import io
+
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Surveillance Keyword", "Notes"])
+        ws.append(["shell company", "priority 1"])
+        ws.append(["hawala transfer", "priority 2"])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        uploaded_file = SimpleUploadedFile(
+            "surveillance.xlsx",
+            buf.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        res = self.client.post(
+            reverse("parse_keywords_file"),
+            {"file": uploaded_file},
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("shell company", data["keywords"])
+        self.assertIn("hawala transfer", data["keywords"])
+
+    def test_parse_keywords_file_view_no_file(self):
+        res = self.client.post(reverse("parse_keywords_file"), {})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("No file uploaded", res.json()["message"])
+
+    def test_parse_keywords_file_view_invalid_extension(self):
+        uploaded_file = SimpleUploadedFile(
+            "malicious.exe", b"binary", content_type="application/octet-stream"
+        )
+        res = self.client.post(
+            reverse("parse_keywords_file"),
+            {"file": uploaded_file},
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Unsupported file type", res.json()["message"])
+
+    def test_upload_profile_keywords_file_view_success(self):
+        txt_content = b"unauthorized payment, phantom vendor"
+        uploaded_file = SimpleUploadedFile("keywords.txt", txt_content, content_type="text/plain")
+        url = reverse("upload_profile_keywords_file", kwargs={"profile_id": str(self.profile.id)})
+        res = self.client.post(
+            url,
+            {"file": uploaded_file},
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("unauthorized payment", data["profile"]["keywords"])
+        self.assertIn("phantom vendor", data["profile"]["keywords"])
+
+        # Check DB updated
+        self.profile.refresh_from_db()
+        self.assertIn("unauthorized payment", self.profile.keywords)
+
+    def test_upload_profile_keywords_file_view_empty_file(self):
+        uploaded_file = SimpleUploadedFile("empty.txt", b"   \n\n  ", content_type="text/plain")
+        url = reverse("upload_profile_keywords_file", kwargs={"profile_id": str(self.profile.id)})
+        res = self.client.post(
+            url,
+            {"file": uploaded_file},
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("No valid keywords found", res.json()["message"])
+
+    def test_upload_profile_keywords_file_view_not_found(self):
+        uploaded_file = SimpleUploadedFile("test.txt", b"keyword1", content_type="text/plain")
+        url = reverse("upload_profile_keywords_file", kwargs={"profile_id": str(uuid.uuid4())})
+        res = self.client.post(
+            url,
+            {"file": uploaded_file},
+        )
+        self.assertEqual(res.status_code, 404)

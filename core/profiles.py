@@ -3,6 +3,7 @@ Core Investigation Profiles Service & Selectors
 Provides unified profile management, cross-app profile resolution, and synchronization.
 """
 
+import json
 import uuid
 
 from django.core.exceptions import ValidationError
@@ -11,6 +12,176 @@ from django.http import HttpRequest
 from loguru import logger
 
 from .models import InvestigationProfile
+
+
+def _normalize_keywords(raw: list[str] | str | None) -> list[str]:
+    """
+    Normalizes keyword input into a unique, non-empty list of strings.
+    Handles comma-separated strings, JSON arrays, and iterables.
+    """
+    if not raw:
+        return []
+
+    items: list[str] = []
+    if isinstance(raw, str):
+        raw_str = raw.strip()
+        if raw_str.startswith("[") and raw_str.endswith("]"):
+            try:
+                parsed = json.loads(raw_str)
+                if isinstance(parsed, list):
+                    items = [str(x) for x in parsed]
+            except Exception:
+                items = [x.strip() for x in raw_str.strip("[]").split(",")]
+        else:
+            items = [x.strip() for x in raw_str.split(",")]
+    elif isinstance(raw, (list, tuple, set)):
+        for elem in raw:
+            if isinstance(elem, str) and "," in elem:
+                items.extend([x.strip() for x in elem.split(",")])
+            else:
+                items.append(str(elem).strip())
+
+    normalized: list[str] = []
+    seen = set()
+    for item in items:
+        clean = item.strip().strip("'\"")
+        if clean and clean.lower() not in seen:
+            seen.add(clean.lower())
+            normalized.append(clean)
+    return normalized
+
+
+def extract_keywords_from_file(file_obj, filename: str = "") -> list[str]:
+    """
+    Extracts search and surveillance keywords from an uploaded file (.txt, .csv, .xlsx, .xls).
+    Supports multi-sheet Excel files with smart header detection, CSV with column detection,
+    and delimiter-separated plain text files.
+    """
+    import csv
+    import io
+
+    fname = (filename or getattr(file_obj, "name", "")).lower()
+    raw_keywords: list[str] = []
+
+    ignored_headers = {
+        "keyword",
+        "keywords",
+        "term",
+        "terms",
+        "word",
+        "words",
+        "search term",
+        "search terms",
+        "flagged word",
+        "flagged words",
+        "sr",
+        "s.no",
+        "sno",
+        "id",
+        "sl no",
+        "no",
+        "item",
+        "description",
+        "category",
+    }
+
+    if fname.endswith((".xlsx", ".xls")):
+        import openpyxl
+
+        try:
+            wb = openpyxl.load_workbook(file_obj, data_only=True, read_only=True)
+            for sheetname in wb.sheetnames:
+                ws = wb[sheetname]
+                rows = list(ws.iter_rows(values_only=True))
+                if not rows:
+                    continue
+
+                header_row = [str(c).strip().lower() if c is not None else "" for c in rows[0]]
+                kw_col_idx = None
+                for idx, h in enumerate(header_row):
+                    if any(k in h for k in ("keyword", "search term", "flagged", "surveillance")):
+                        kw_col_idx = idx
+                        break
+
+                start_idx = (
+                    1
+                    if kw_col_idx is not None or any(h in ignored_headers for h in header_row)
+                    else 0
+                )
+
+                for row in rows[start_idx:]:
+                    if not row:
+                        continue
+                    cells_to_check = (
+                        [row[kw_col_idx]]
+                        if kw_col_idx is not None and kw_col_idx < len(row)
+                        else row
+                    )
+                    for cell in cells_to_check:
+                        if cell is None:
+                            continue
+                        val_str = str(cell).strip()
+                        if not val_str or val_str.lower() in ignored_headers:
+                            continue
+                        if "," in val_str:
+                            raw_keywords.extend(val_str.split(","))
+                        else:
+                            raw_keywords.append(val_str)
+            wb.close()
+            return _normalize_keywords(raw_keywords)
+        except Exception as exc:
+            logger.warning(f"Excel parsing fallback for {fname}: {exc}")
+            if hasattr(file_obj, "seek"):
+                file_obj.seek(0)
+
+    # Text / CSV fallback
+    content = file_obj.read()
+    if isinstance(content, bytes):
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = content.decode("latin-1", errors="ignore")
+    else:
+        text = str(content)
+
+    if fname.endswith(".csv"):
+        reader = csv.reader(io.StringIO(text))
+        rows = list(reader)
+        if rows:
+            header_row = [c.strip().lower() for c in rows[0]]
+            kw_col_idx = None
+            for idx, h in enumerate(header_row):
+                if any(k in h for k in ("keyword", "search term", "flagged", "surveillance")):
+                    kw_col_idx = idx
+                    break
+
+            start_idx = (
+                1 if kw_col_idx is not None or any(h in ignored_headers for h in header_row) else 0
+            )
+
+            for row in rows[start_idx:]:
+                cells = (
+                    [row[kw_col_idx]] if kw_col_idx is not None and kw_col_idx < len(row) else row
+                )
+                for cell in cells:
+                    c_clean = cell.strip()
+                    if c_clean and c_clean.lower() not in ignored_headers:
+                        raw_keywords.append(c_clean)
+            return _normalize_keywords(raw_keywords)
+
+    # Standard plain text parsing (supports newlines, tabs, semicolons, commas)
+    lines = text.splitlines()
+    for line in lines:
+        line_str = line.strip()
+        if not line_str:
+            continue
+        normalized_line = line_str.replace("\t", ",").replace(";", ",")
+        for p in normalized_line.split(","):
+            p_clean = p.strip()
+            if p_clean and p_clean.lower() not in ignored_headers:
+                raw_keywords.append(p_clean)
+
+    return _normalize_keywords(raw_keywords)
 
 
 def get_all_profiles() -> QuerySet[InvestigationProfile]:
@@ -79,6 +250,7 @@ def create_investigation_profile(
     status: str = "ACTIVE",
     notes: str = "",
     avatar_color: str = "indigo",
+    keywords: list[str] | str | None = None,
 ) -> InvestigationProfile:
     """
     Creates a new unified investigation profile and synchronizes it across modules.
@@ -86,6 +258,8 @@ def create_investigation_profile(
     clean_name = full_name.strip()
     if not clean_name:
         raise ValueError("Profile full name cannot be blank.")
+
+    keywords_list = _normalize_keywords(keywords)
 
     profile = InvestigationProfile.objects.create(
         full_name=clean_name,
@@ -100,6 +274,7 @@ def create_investigation_profile(
         status=status if status in dict(InvestigationProfile.Status.choices) else "ACTIVE",
         notes=notes.strip(),
         avatar_color=avatar_color.strip() or "indigo",
+        keywords=keywords_list,
     )
 
     # Sync to Q-Bank AuditedPerson if q_bank is available
@@ -120,6 +295,33 @@ def create_investigation_profile(
     except Exception as exc:
         logger.debug(f"Optional Q-Bank sync skipped: {exc}")
 
+    return profile
+
+
+def add_keywords_to_profile(
+    profile_id: str | uuid.UUID,
+    new_keywords: list[str] | str,
+) -> InvestigationProfile:
+    """
+    Appends search/flag surveillance keywords to an existing profile without
+    deleting or overwriting existing keywords (case-insensitive deduplication).
+    """
+    profile = get_profile_by_id(profile_id)
+    if not profile:
+        raise ValueError(f"Investigation profile '{profile_id}' not found.")
+
+    existing_keywords = profile.keywords or []
+    appended = _normalize_keywords(new_keywords)
+
+    seen = {k.lower() for k in existing_keywords}
+    updated = list(existing_keywords)
+    for kw in appended:
+        if kw.lower() not in seen:
+            seen.add(kw.lower())
+            updated.append(kw)
+
+    profile.keywords = updated
+    profile.save(update_fields=["keywords", "updated_at"])
     return profile
 
 

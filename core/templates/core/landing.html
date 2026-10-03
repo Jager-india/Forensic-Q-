@@ -1,7 +1,7 @@
 <c-base title="ForensiQ | Forensic Investigation Platform">
 
-    <!-- Page Header Section with Top Right Add Profile -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8" x-data="{ showProfileModal: false }">
+    <!-- Page Header Section with Top Right Profiles Button & Modal -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8" x-data="profilesManager">
         <div>
             <div
                 class="flex items-center space-x-2 text-xs font-mono font-semibold uppercase tracking-wider text-amber-500 mb-1.5">
@@ -13,106 +13,291 @@
             </h1>
         </div>
 
-        <!-- Top Right: Add Profile Button -->
+        <!-- Top Right: Profiles Button -->
         <div>
-            <button type="button" id="landing-add-profile-btn" @click="showProfileModal = true"
+            <button type="button" id="landing-profiles-btn" @click="showProfileModal = true"
                 class="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-amber-500/20 cursor-pointer">
-                <i class="fa-solid fa-user-plus text-xs"></i>
-                <span>Add Profile</span>
+                <i class="fa-solid fa-users text-xs"></i>
+                <span>Profiles</span>
+                <span class="ml-0.5 px-1.5 py-0.5 rounded-full bg-zinc-950/20 text-zinc-950 text-[10px] font-mono" x-text="profilesList.length"></span>
             </button>
         </div>
 
 
-        <!-- Add Investigation Profile Modal -->
-        <div x-show="showProfileModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <!-- Investigation Profiles Management Modal -->
+        <div x-show="showProfileModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-4">
             <div @click.outside="showProfileModal = false"
-                class="bg-theme-surface border border-theme-border rounded-2xl w-full max-w-lg shadow-2xl p-6 relative">
-                <button type="button" @click="showProfileModal = false" class="absolute top-4 right-4 text-theme-muted hover:text-theme-text cursor-pointer">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-
-                <div class="flex items-center gap-3 mb-4">
-                    <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center text-lg">
-                        <i class="fa-solid fa-user-shield"></i>
+                class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden relative flex flex-col max-h-[90vh]">
+                
+                <!-- Modal Header -->
+                <div class="p-5 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/50 dark:bg-zinc-950/40">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-user-shield"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white">Investigation Profiles &amp; Surveillance</h3>
+                            <p class="text-xs text-slate-500 dark:text-zinc-400">Auditee registry and search/flag keywords unified across ForensiQ modules.</p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 class="text-base font-bold text-theme-text">Register Investigation Profile</h3>
-                        <p class="text-xs text-theme-muted">Unified across Q-Bank, Q-Voice, Q-Verify, Q-Ledger, Q-Mail &amp; Q-Chat.</p>
+                    <button type="button" @click="showProfileModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer p-1">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Navigation Tabs (Profiles Directory vs Add Profile) -->
+                <div class="flex items-center gap-2 px-5 pt-3 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                    <button type="button" 
+                            @click="activeTab = 'directory'"
+                            :class="activeTab === 'directory' ? 'border-amber-500 text-amber-500 bg-amber-500/5 dark:bg-amber-500/10' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-zinc-200'"
+                            class="px-4 py-2 text-xs font-bold border-b-2 rounded-t-lg transition flex items-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-address-book text-xs"></i>
+                        <span>Profiles Directory</span>
+                        <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-mono" x-text="profilesList.length"></span>
+                    </button>
+
+                    <button type="button" 
+                            @click="activeTab = 'add'"
+                            :class="activeTab === 'add' ? 'border-amber-500 text-amber-500 bg-amber-500/5 dark:bg-amber-500/10' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-zinc-200'"
+                            class="px-4 py-2 text-xs font-bold border-b-2 rounded-t-lg transition flex items-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-user-plus text-xs"></i>
+                        <span>Add Profile</span>
+                    </button>
+                </div>
+
+                <!-- Notification Banner -->
+                <div x-show="uploadNotice" x-cloak class="mx-5 mt-3 p-2.5 rounded-xl text-xs flex items-center justify-between transition-all"
+                     :class="uploadNoticeType === 'error' ? 'bg-rose-500/10 border border-rose-500/20 text-rose-500 dark:text-rose-400' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400'">
+                    <div class="flex items-center gap-2">
+                        <i :class="uploadNoticeType === 'error' ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-circle-check'"></i>
+                        <span x-text="uploadNotice"></span>
+                    </div>
+                    <button type="button" @click="uploadNotice = ''" class="cursor-pointer opacity-70 hover:opacity-100 p-0.5">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Tab 1: Profiles Directory Content -->
+                <div x-show="activeTab === 'directory'" class="p-5 flex-1 overflow-y-auto space-y-4">
+                    
+                    <!-- Search & Filter Bar -->
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500 text-xs"></i>
+                        <input type="text" 
+                               x-model="searchQuery" 
+                               placeholder="Filter profiles by name, department, employee ID, or surveillance keyword..."
+                               class="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition">
+                    </div>
+
+                    <!-- Profiles List Cards -->
+                    <div class="space-y-3">
+                        <template x-for="prof in filteredProfiles()" :key="prof.id">
+                            <div class="p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-950/40 hover:border-slate-300 dark:hover:border-zinc-700 transition">
+                                <!-- Profile Top Info -->
+                                <div class="flex items-start justify-between gap-3 mb-2">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center text-xs font-bold font-mono shrink-0"
+                                             x-text="prof.initials || 'Q'"></div>
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-2">
+                                                <h4 class="font-bold text-xs text-slate-900 dark:text-white truncate" x-text="prof.full_name"></h4>
+                                                <span x-show="prof.employee_id" class="text-[10px] font-mono text-slate-400 dark:text-zinc-500" x-text="'#' + prof.employee_id"></span>
+                                            </div>
+                                            <p class="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
+                                                <span x-text="prof.department || 'General Audit'"></span>
+                                                <span x-show="prof.designation" x-text="' • ' + prof.designation"></span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Risk Level Badge -->
+                                    <div class="shrink-0">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider"
+                                              :class="{
+                                                  'bg-rose-500/10 text-rose-400 border border-rose-500/20': prof.risk_level === 'CRITICAL' || prof.risk_level === 'HIGH',
+                                                  'bg-amber-500/10 text-amber-400 border border-amber-500/20': prof.risk_level === 'MEDIUM',
+                                                  'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20': prof.risk_level === 'LOW'
+                                              }"
+                                              x-text="prof.risk_level"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Keywords List & Add Keyword Area -->
+                                <div class="pt-2 border-t border-slate-100 dark:border-zinc-800/80">
+                                    <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                                        <span class="text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-wider flex items-center gap-1">
+                                            <i class="fa-solid fa-tags text-[9px] text-amber-500"></i>
+                                            <span>Keywords:</span>
+                                        </span>
+                                        <template x-for="kw in (prof.keywords || [])" :key="kw">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                                                  x-text="kw"></span>
+                                        </template>
+                                        <span x-show="!prof.keywords || prof.keywords.length === 0" class="text-[10px] text-slate-400 dark:text-zinc-500 italic">
+                                            No surveillance keywords attached yet.
+                                        </span>
+                                    </div>
+
+                                    <!-- Inline Add Keyword Trigger / Form -->
+                                    <div>
+                                        <div x-show="activeAppendProfileId !== prof.id" class="flex items-center gap-2">
+                                            <button type="button" 
+                                                    @click="activeAppendProfileId = prof.id; appendKeywordInput = '';"
+                                                    class="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-slate-200/60 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700 transition cursor-pointer">
+                                                <i class="fa-solid fa-plus text-[9px] text-amber-500"></i>
+                                                <span>Add Keyword</span>
+                                            </button>
+                                            <label class="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition cursor-pointer"
+                                                   :class="isUploadingForProfile === prof.id ? 'opacity-60 pointer-events-none' : ''">
+                                                <i class="fa-solid" :class="isUploadingForProfile === prof.id ? 'fa-spinner fa-spin text-[9px]' : 'fa-file-arrow-up text-[9px]'"></i>
+                                                <span x-text="isUploadingForProfile === prof.id ? 'Uploading...' : 'Upload File (.txt, .xlsx)'"></span>
+                                                <input type="file" accept=".txt,.xlsx,.xls,.csv" class="hidden" @change="uploadKeywordsFileForProfile(prof.id, $event)">
+                                            </label>
+                                        </div>
+
+                                        <div x-show="activeAppendProfileId === prof.id" class="flex items-center gap-2 mt-1.5" x-cloak>
+                                            <input type="text" 
+                                                   x-model="appendKeywordInput" 
+                                                   @keydown.enter.prevent="submitAppendKeyword(prof.id)"
+                                                   placeholder="Enter keyword(s), e.g. kickback, bonus..."
+                                                   class="flex-1 px-2.5 py-1 text-xs rounded-lg bg-white dark:bg-zinc-900 border border-amber-500/60 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500">
+                                            <button type="button" 
+                                                    @click="submitAppendKeyword(prof.id)"
+                                                    :disabled="isSubmittingAppend || !appendKeywordInput.trim()"
+                                                    class="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 disabled:opacity-50 transition cursor-pointer flex items-center gap-1">
+                                                <i class="fa-solid fa-check text-[10px]"></i>
+                                                <span>Save</span>
+                                            </button>
+                                            <button type="button" 
+                                                    @click="activeAppendProfileId = null; appendKeywordInput = '';"
+                                                    class="px-2 py-1 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div x-show="filteredProfiles().length === 0" class="py-8 text-center text-xs text-slate-400 dark:text-zinc-500">
+                            <i class="fa-solid fa-user-slash text-2xl text-slate-400 dark:text-zinc-600 mb-2 block"></i>
+                            No investigation profiles found matching your search.
+                        </div>
                     </div>
                 </div>
 
-                <form method="POST" action="{% url 'create_profile' %}" class="space-y-3.5">
-                    {% csrf_token %}
-                    <input type="hidden" name="next" value="/">
+                <!-- Tab 2: Add Profile Form -->
+                <div x-show="activeTab === 'add'" class="p-5 flex-1 overflow-y-auto" x-cloak>
+                    <form method="POST" action="{% url 'create_profile' %}" class="space-y-3.5">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="/">
+                        <input type="hidden" name="keywords" :value="JSON.stringify(newKeywords)">
 
-                    <div>
-                        <label class="block text-xs font-semibold text-theme-text mb-1">Target / Auditee Full Name <span class="text-rose-500">*</span></label>
-                        <input type="text" name="full_name" placeholder="e.g. Ramesh Chandra / Rajesh Sharma" required
-                            class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
-                    </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 dark:text-zinc-200 mb-1">Target / Auditee Full Name <span class="text-rose-500">*</span></label>
+                            <input type="text" name="full_name" placeholder="e.g. Ramesh Chandra / Rajesh Sharma" required
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500">
+                        </div>
 
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-theme-text mb-1">Employee ID / Target Ref</label>
-                            <input type="text" name="employee_id" placeholder="e.g. EMP-9042"
-                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500 font-mono">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 dark:text-zinc-200 mb-1">Employee ID / Target Ref</label>
+                                <input type="text" name="employee_id" placeholder="e.g. EMP-9042"
+                                    class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 dark:text-zinc-200 mb-1">Initial Risk Level</label>
+                                <select name="risk_level"
+                                    class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 cursor-pointer">
+                                    <option value="LOW">Low Risk</option>
+                                    <option value="MEDIUM" selected>Medium Risk</option>
+                                    <option value="HIGH">High Risk / Flagged</option>
+                                    <option value="CRITICAL">Critical Intercept</option>
+                                </select>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-theme-text mb-1">Initial Risk Level</label>
-                            <select name="risk_level"
-                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500 cursor-pointer">
-                                <option value="LOW">Low Risk</option>
-                                <option value="MEDIUM" selected>Medium Risk</option>
-                                <option value="HIGH">High Risk / Flagged</option>
-                                <option value="CRITICAL">Critical Intercept</option>
-                            </select>
-                        </div>
-                    </div>
 
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-theme-text mb-1">Department / Division</label>
-                            <input type="text" name="department" placeholder="e.g. Strategic Procurement"
-                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 dark:text-zinc-200 mb-1">Department / Division</label>
+                                <input type="text" name="department" placeholder="e.g. Strategic Procurement"
+                                    class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 dark:text-zinc-200 mb-1">Designation / Role</label>
+                                <input type="text" name="designation" placeholder="e.g. Senior Buyer / GM"
+                                    class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500">
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-theme-text mb-1">Designation / Role</label>
-                            <input type="text" name="designation" placeholder="e.g. Senior Buyer / GM"
-                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
-                        </div>
-                    </div>
 
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-theme-text mb-1">Official Email</label>
-                            <input type="email" name="email" placeholder="e.g. target@company.internal"
-                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 dark:text-zinc-200 mb-1">Official Email</label>
+                                <input type="email" name="email" placeholder="e.g. target@company.internal"
+                                    class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-800 dark:text-zinc-200 mb-1">Contact Phone</label>
+                                <input type="text" name="phone" placeholder="e.g. +91 98401 23456"
+                                    class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500">
+                            </div>
                         </div>
+
+                        <!-- Interactive Keywords Tag Chip Entry -->
                         <div>
-                            <label class="block text-xs font-semibold text-theme-text mb-1">Contact Phone</label>
-                            <input type="text" name="phone" placeholder="e.g. +91 98401 23456"
-                                class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                                    <i class="fa-solid fa-tags text-amber-500 mr-1"></i>Search &amp; Surveillance Keywords
+                                    <span class="text-[11px] font-normal text-slate-400 dark:text-zinc-500 ml-1">(Type keyword &amp; press Enter or comma)</span>
+                                </label>
+                                <label class="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition cursor-pointer"
+                                       :class="isParsingNewProfileFile ? 'opacity-60 pointer-events-none' : ''">
+                                    <i class="fa-solid" :class="isParsingNewProfileFile ? 'fa-spinner fa-spin text-[9px]' : 'fa-file-arrow-up text-[9px]'"></i>
+                                    <span x-text="isParsingNewProfileFile ? 'Extracting...' : 'Upload File (.txt, .xlsx)'"></span>
+                                    <input type="file" accept=".txt,.xlsx,.xls,.csv" class="hidden" @change="uploadKeywordsFileForNewProfile($event)">
+                                </label>
+                            </div>
+
+                            <!-- Tag Box Container -->
+                            <div class="w-full min-h-[42px] p-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 flex flex-wrap items-center gap-1.5 focus-within:border-amber-500 transition">
+                                <template x-for="(tag, idx) in newKeywords" :key="idx">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                                        <span x-text="tag"></span>
+                                        <button type="button" @click="removeTag(idx)" class="text-amber-400/70 hover:text-amber-300 cursor-pointer">
+                                            <i class="fa-solid fa-xmark text-[10px]"></i>
+                                        </button>
+                                    </span>
+                                </template>
+
+                                <input type="text" 
+                                       x-model="keywordInput"
+                                       @keydown.enter.prevent="addTag()"
+                                       @keydown.,.prevent="addTag()"
+                                       @keydown.backspace="if(!keywordInput) removeTag(newKeywords.length - 1)"
+                                       placeholder="Add keyword (e.g. kickback, cash, confidential)..."
+                                       class="flex-1 min-w-[180px] bg-transparent border-0 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-0 p-1">
+                            </div>
                         </div>
-                    </div>
 
-                    <div>
-                        <label class="block text-xs font-semibold text-theme-text mb-1">Investigation Hypothesis / Notes</label>
-                        <textarea name="notes" rows="2" placeholder="Audit scope, whistle-blower allegations, or suspicious parameter notes..."
-                            class="w-full px-3 py-2 text-xs rounded-xl bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-amber-500"></textarea>
-                    </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 dark:text-zinc-200 mb-1">Investigation Hypothesis / Notes</label>
+                            <textarea name="notes" rows="2" placeholder="Audit scope, whistle-blower allegations, or suspicious parameter notes..."
+                                class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"></textarea>
+                        </div>
 
-                    <div class="pt-3 border-t border-theme-border flex items-center justify-end gap-3">
-                        <button type="button" @click="showProfileModal = false"
-                            class="px-4 py-2 rounded-xl text-xs font-semibold text-theme-muted hover:text-theme-text bg-theme-app border border-theme-border cursor-pointer">
-                            Cancel
-                        </button>
-                        <button type="submit"
-                            class="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20">
-                            <i class="fa-solid fa-check"></i>
-                            <span>Register Profile</span>
-                        </button>
-                    </div>
-                </form>
+                        <div class="pt-3 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-end gap-3">
+                            <button type="button" @click="activeTab = 'directory'"
+                                class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200 bg-slate-100 dark:bg-zinc-800 cursor-pointer">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                class="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20">
+                                <i class="fa-solid fa-check"></i>
+                                <span>Register Profile</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -135,4 +320,164 @@
         {% endfor %}
     </div>
 
+    <!-- Client-side Alpine Component Definition for Profiles & Surveillance Keywords -->
+    <script>
+        function initProfilesManager() {
+            if (!window.Alpine) return;
+            Alpine.data('profilesManager', () => ({
+                showProfileModal: false,
+                activeTab: 'directory',
+                searchQuery: '',
+                newKeywords: [],
+                keywordInput: '',
+                activeAppendProfileId: null,
+                appendKeywordInput: '',
+                isSubmittingAppend: false,
+                isParsingNewProfileFile: false,
+                isUploadingForProfile: null,
+                uploadNotice: '',
+                uploadNoticeType: 'success',
+                noticeTimeout: null,
+                profilesList: {{ profiles_json|safe }},
+                setNotice(msg, type = 'success') {
+                    this.uploadNotice = msg;
+                    this.uploadNoticeType = type;
+                    if (this.noticeTimeout) clearTimeout(this.noticeTimeout);
+                    this.noticeTimeout = setTimeout(() => {
+                        this.uploadNotice = '';
+                    }, 5000);
+                },
+                addTag() {
+                    const val = this.keywordInput.trim();
+                    if (!val) return;
+                    const parts = val.split(',').map(s => s.trim()).filter(Boolean);
+                    parts.forEach(p => {
+                        if (!this.newKeywords.some(k => k.toLowerCase() === p.toLowerCase())) {
+                            this.newKeywords.push(p);
+                        }
+                    });
+                    this.keywordInput = '';
+                },
+                removeTag(idx) {
+                    this.newKeywords.splice(idx, 1);
+                },
+                async uploadKeywordsFileForNewProfile(event) {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    this.isParsingNewProfileFile = true;
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+                        const res = await fetch('/api/keywords/parse-file/', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': csrfToken,
+                            },
+                            body: formData,
+                        });
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            let addedCount = 0;
+                            (data.keywords || []).forEach(kw => {
+                                if (!this.newKeywords.some(k => k.toLowerCase() === kw.toLowerCase())) {
+                                    this.newKeywords.push(kw);
+                                    addedCount++;
+                                }
+                            });
+                            this.setNotice(`Extracted ${data.count} keyword(s) from "${data.filename}" (${addedCount} newly added).`, 'success');
+                        } else {
+                            this.setNotice(data.message || 'Failed parsing keyword file.', 'error');
+                        }
+                    } catch (err) {
+                        this.setNotice('Network error uploading keyword file.', 'error');
+                    } finally {
+                        this.isParsingNewProfileFile = false;
+                        event.target.value = '';
+                    }
+                },
+                async uploadKeywordsFileForProfile(profileId, event) {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    this.isUploadingForProfile = profileId;
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+                        const res = await fetch(`/profiles/${profileId}/keywords/upload/`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': csrfToken,
+                            },
+                            body: formData,
+                        });
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            const p = this.profilesList.find(x => x.id === profileId);
+                            if (p) {
+                                p.keywords = data.profile.keywords;
+                            }
+                            this.setNotice(data.message || `Appended keywords from "${data.filename}".`, 'success');
+                        } else {
+                            this.setNotice(data.message || 'Failed uploading keywords file.', 'error');
+                        }
+                    } catch (err) {
+                        this.setNotice('Network error uploading keywords file.', 'error');
+                    } finally {
+                        this.isUploadingForProfile = null;
+                        event.target.value = '';
+                    }
+                },
+                async submitAppendKeyword(profileId) {
+                    const kw = this.appendKeywordInput.trim();
+                    if (!kw) return;
+                    this.isSubmittingAppend = true;
+                    try {
+                        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+                        const res = await fetch(`/profiles/${profileId}/keywords/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrfToken,
+                            },
+                            body: JSON.stringify({ keywords: kw })
+                        });
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            const p = this.profilesList.find(x => x.id === profileId);
+                            if (p) {
+                                p.keywords = data.profile.keywords;
+                            }
+                            this.appendKeywordInput = '';
+                            this.activeAppendProfileId = null;
+                            this.setNotice(`Keywords added to ${data.profile.full_name}.`, 'success');
+                        } else {
+                            this.setNotice(data.message || 'Error appending keywords.', 'error');
+                        }
+                    } catch (err) {
+                        this.setNotice('Network error while appending keywords.', 'error');
+                    } finally {
+                        this.isSubmittingAppend = false;
+                    }
+                },
+                filteredProfiles() {
+                    if (!this.searchQuery.trim()) return this.profilesList;
+                    const q = this.searchQuery.toLowerCase();
+                    return this.profilesList.filter(p => {
+                        const nameMatch = (p.full_name || '').toLowerCase().includes(q);
+                        const deptMatch = (p.department || '').toLowerCase().includes(q);
+                        const desigMatch = (p.designation || '').toLowerCase().includes(q);
+                        const empMatch = (p.employee_id || '').toLowerCase().includes(q);
+                        const kwMatch = (p.keywords || []).some(k => k.toLowerCase().includes(q));
+                        return nameMatch || deptMatch || desigMatch || empMatch || kwMatch;
+                    });
+                }
+            }));
+        }
+        if (window.Alpine) {
+            initProfilesManager();
+        } else {
+            document.addEventListener('alpine:init', initProfilesManager);
+        }
+    </script>
 </c-base>

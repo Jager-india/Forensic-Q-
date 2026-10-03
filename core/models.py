@@ -95,6 +95,11 @@ class InvestigationProfile(ForensicBaseModel):
         default="indigo",
         help_text="UI Accent color tag",
     )
+    keywords = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Search and flag surveillance keywords associated with this auditee / target.",
+    )
 
     class Meta:
         app_label = "core"
@@ -121,7 +126,7 @@ class InvestigationProfile(ForensicBaseModel):
             return parts[0][:2].upper()
         return f"{parts[0][0]}{parts[-1][0]}".upper()
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "id": str(self.id),
             "full_name": self.full_name,
@@ -135,4 +140,5 @@ class InvestigationProfile(ForensicBaseModel):
             "initials": self.initials,
             "display_name": self.display_name,
             "avatar_color": self.avatar_color,
+            "keywords": self.keywords or [],
         }
