@@ -110,6 +110,14 @@
 
     <!-- Tabulator.js Evidence Data Grid -->
     <div class="mb-8">
+        <!-- Top Pagination Controls -->
+        <div class="flex items-center justify-end mb-2.5">
+            <div class="tabulator border-0 bg-transparent">
+                <div class="tabulator-footer border-0 bg-transparent p-0">
+                    <div id="documents-top-pagination" class="tabulator-paginator flex flex-wrap items-center gap-1 text-xs text-slate-500 dark:text-zinc-400 select-none"></div>
+                </div>
+            </div>
+        </div>
         <div id="documents-table" class="rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 shadow-sm"></div>
     </div>
 
@@ -320,6 +328,8 @@
                     }
                 ]
             });
+
+            setupTopPaginationSync(table, '#documents-table', '#documents-top-pagination');
 
             table.on("rowClick", function(e, row) {
                 openDocDrawer(row.getData().id);
