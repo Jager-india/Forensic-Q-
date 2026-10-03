@@ -12,11 +12,40 @@
         mode: 'select',
         isOpen: false,
         selectedId: '{{ active_profile.id|default:'' }}',
-        selectedLabel: '{% if active_profile %}{{ active_profile.full_name }}{% if active_profile.department %} ({{ active_profile.department }}){% endif %}{% endif %}',
+        selectedLabel: '{% if active_profile %}{{ active_profile.full_name|escapejs }}{% if active_profile.department %} ({{ active_profile.department|escapejs }}){% endif %}{% endif %}',
+        initialId: '{{ active_profile.id|default:'' }}',
+        initialLabel: '{% if active_profile %}{{ active_profile.full_name|escapejs }}{% if active_profile.department %} ({{ active_profile.department|escapejs }}){% endif %}{% endif %}',
         search: '',
         newName: '',
         newDept: '',
         newRole: '',
+        init() {
+            const checkHidden = (el) => el.classList.contains('hidden') || el.style.display === 'none' || el.hidden;
+            const modal = this.$el.closest('.fixed, [id*=\'modal\'], [class*=\'modal\']');
+            if (modal) {
+                let wasHidden = checkHidden(modal);
+                const observer = new MutationObserver(() => {
+                    const isHidden = checkHidden(modal);
+                    if (wasHidden !== isHidden) {
+                        wasHidden = isHidden;
+                        this.resetToDefault();
+                    }
+                });
+                observer.observe(modal, { attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+            }
+        },
+        resetToDefault() {
+            this.mode = 'select';
+            this.isOpen = false;
+            this.search = '';
+            this.newName = '';
+            this.newDept = '';
+            this.newRole = '';
+            if (this.initialId) {
+                this.selectedId = this.initialId;
+                this.selectedLabel = this.initialLabel;
+            }
+        },
         profiles: [
             {% for prof in investigation_profiles %}
             {
