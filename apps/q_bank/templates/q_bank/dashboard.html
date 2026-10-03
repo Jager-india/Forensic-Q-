@@ -17,39 +17,6 @@
         </div>
     </c-page_header>
 
-
-
-    <!-- Top KPI Summary Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <c-stat_card 
-            title="Target Auditees" 
-            value="{{ metrics.total_persons }}" 
-            subtitle="{{ metrics.total_accounts }} Linked Bank Statements" 
-            icon="fa-solid fa-users-viewfinder" 
-            variant="slate" />
-            
-        <c-stat_card 
-            title="Total Transactions" 
-            value="{{ metrics.total_txns }}" 
-            subtitle="Analyzed Across All Banks" 
-            icon="fa-solid fa-receipt" 
-            variant="teal" />
-            
-        <c-stat_card 
-            title="Total Debit Volume" 
-            value="₹{{ metrics.total_debit_formatted }}" 
-            subtitle="Total Outflows" 
-            icon="fa-solid fa-arrow-up-right-dots" 
-            variant="rose" />
-            
-        <c-stat_card 
-            title="Total Credit Volume" 
-            value="₹{{ metrics.total_credit_formatted }}" 
-            subtitle="Total Inflows" 
-            icon="fa-solid fa-arrow-down-left-and-up-right-to-center" 
-            variant="emerald" />
-    </div>
-
     <!-- Main Section: Audited Persons Directory (The core entry point) -->
     <div class="mb-8" x-data="{
         searchQuery: '',
