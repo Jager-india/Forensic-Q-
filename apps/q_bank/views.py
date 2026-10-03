@@ -285,9 +285,7 @@ def upload_statement_view(request: HttpRequest) -> HttpResponse:
         account_holder = Path(uploaded_file.name).stem
 
     bank_name = request.POST.get("bank_name", "").strip()
-    statement_label = (
-        request.POST.get("statement_label", "").strip() or "Bank Statement Investigation"
-    )
+    statement_label = request.POST.get("statement_label", "").strip()
     account_number = request.POST.get("account_number", "").strip()
 
     try:

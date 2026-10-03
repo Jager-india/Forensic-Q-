@@ -381,6 +381,28 @@ class QBankServicesAndSelectorsTests(TestCase):
         self.assertIsNotNone(acc)
         self.assertEqual(acc.total_transactions, 1)
 
+    def test_upload_statement_auto_extracts_period_from_table(self):
+        csv_data = (
+            b"Date,Narration,Transaction ID,Debit Amount,Credit Amount,Closing Balance\n"
+            b"01/03/2026,UPI/Vendor1,TXN101,5000,0,95000\n"
+            b"28/03/2026,SALARY/Credit,TXN102,0,50000,145000\n"
+        )
+        upload_file = SimpleUploadedFile("hdfc_period_test.csv", csv_data, content_type="text/csv")
+        res = self.client.post(
+            reverse("q_bank:upload_statement"),
+            data={
+                "statement_file": upload_file,
+                "account_holder": "Period Test Person",
+                "bank_name": "HDFC Bank",
+                "account_number": "501002984123",
+            },
+        )
+        self.assertEqual(res.status_code, 302)
+        acc = BankAccount.objects.filter(account_holder="Period Test Person").first()
+        self.assertIsNotNone(acc)
+        self.assertEqual(acc.total_transactions, 2)
+        self.assertEqual(acc.statement_label, "01 Mar 2026 - 28 Mar 2026")
+
     def test_upload_statement_view_errors(self):
         # Missing file
         res_no_file = self.client.post(reverse("q_bank:upload_statement"), data={})

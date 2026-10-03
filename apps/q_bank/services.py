@@ -12,7 +12,10 @@ from django.db import transaction
 from django.utils import timezone
 from loguru import logger
 
-from .backend.statement_parser import parse_bank_statement_dataframe
+from .backend.statement_parser import (
+    extract_statement_period,
+    parse_bank_statement_dataframe,
+)
 from .models import AuditedPerson, BankAccount, BankTransaction, WatchlistRule
 
 
@@ -151,6 +154,10 @@ def ingest_bank_statement_file(
         else:
             bank_name = "Bank Account Audit"
 
+    # Auto-extract statement period from the table data if not explicitly provided
+    if not statement_label:
+        statement_label = extract_statement_period(df)
+
     account = BankAccount.objects.create(
         person=target_person,
         account_holder=auditee_display_name,
@@ -288,6 +295,24 @@ def ingest_bank_statement_file(
     account.cash_deposit_count = cash_deposit_count
     account.hyundai_count = hyundai_count
     account.high_risk_count = high_risk_count
+
+    # Fallback to parsed transaction dates if statement_label is still missing
+    if not account.statement_label or account.statement_label.startswith("Statement Audit"):
+        valid_dates = [
+            t.txn_date or t.value_date
+            for t in transactions_to_create
+            if (t.txn_date or t.value_date)
+        ]
+        if valid_dates:
+            min_d = min(valid_dates)
+            max_d = max(valid_dates)
+            fmt = "%d %b %Y"
+            account.statement_label = (
+                min_d.strftime(fmt)
+                if min_d == max_d
+                else f"{min_d.strftime(fmt)} - {max_d.strftime(fmt)}"
+            )
+
     account.save(
         update_fields=[
             "total_transactions",
@@ -296,6 +321,7 @@ def ingest_bank_statement_file(
             "cash_deposit_count",
             "hyundai_count",
             "high_risk_count",
+            "statement_label",
         ]
     )
 

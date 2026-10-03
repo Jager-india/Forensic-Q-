@@ -361,3 +361,44 @@ def parse_bank_statement_dataframe(file_obj_or_path: Any, filename: str) -> pd.D
 
     df["Name"] = df["UPI_Name"]
     return df
+
+
+def extract_statement_period(df: pd.DataFrame) -> str:
+    """
+    Extracts the statement period (min date - max date) from the transaction table DataFrame.
+    Returns a human-readable date range string (e.g. '01 Mar 2026 - 28 Mar 2026') or empty string.
+    """
+    if df is None or df.empty:
+        return ""
+
+    dates = []
+    for col in ["Date", "Value Date", "Txn Date", "Transaction Date", "Posting Date"]:
+        if col in df.columns:
+            for val in df[col]:
+                raw_s = str(val).strip()
+                if not raw_s or raw_s.lower() in ["0", "nan", "none", "—", "-"]:
+                    continue
+                try:
+                    if re.match(r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}", raw_s):
+                        dt = pd.to_datetime(raw_s, dayfirst=False, errors="coerce")
+                    else:
+                        dt = pd.to_datetime(raw_s, dayfirst=True, errors="coerce")
+                    if pd.notna(dt):
+                        dates.append(dt)
+                except Exception:
+                    continue
+
+    if not dates:
+        return ""
+
+    min_date = min(dates)
+    max_date = max(dates)
+
+    if pd.isna(min_date) or pd.isna(max_date):
+        return ""
+
+    fmt = "%d %b %Y"
+    if min_date == max_date:
+        return min_date.strftime(fmt)
+    return f"{min_date.strftime(fmt)} - {max_date.strftime(fmt)}"
+

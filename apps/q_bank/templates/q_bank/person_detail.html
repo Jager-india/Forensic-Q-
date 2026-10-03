@@ -23,7 +23,7 @@
     <!-- Top Summary KPI Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <c-stat_card title="Total Transactions" value="{{ view_metrics.total_transactions }}"
-            subtitle="{% if selected_account %}{{ selected_account.bank_name }} Statement{% else %}Combined All Statements{% endif %}"
+            subtitle="{% if selected_account %}{{ selected_account.bank_name }}{% if selected_account.statement_label %} • {{ selected_account.statement_label }}{% endif %}{% else %}Combined All Statements{% endif %}"
             icon="fa-solid fa-receipt" variant="slate" />
 
         <c-stat_card title="Total Outflows (Debit)" value="₹{{ view_metrics.total_debit_formatted }}"
@@ -66,11 +66,17 @@
             {% for acc in accounts %}
             <a href="{% url 'q_bank:person_detail' person.id %}?account_id={{ acc.id }}"
                 class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2
-               {% if selected_account_id == acc.id|stringformat:'s' %}bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20{% else %}bg-slate-100 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600{% endif %}">
+               {% if selected_account_id == acc.id|stringformat:'s' %}bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/20{% else %}bg-slate-100 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600{% endif %}"
+                title="{{ acc.bank_name }}{% if acc.account_number %} ({{ acc.account_number }}){% endif %}{% if acc.statement_label %} • {{ acc.statement_label }}{% endif %}">
                 <i class="fa-solid fa-vault text-[11px]"></i>
                 <span>{{ acc.bank_name }}</span>
                 {% if acc.account_number %}
                 <span class="font-mono text-[11px] opacity-80">• {{ acc.account_number }}</span>
+                {% endif %}
+                {% if acc.statement_label %}
+                <span class="font-mono text-[10px] px-1.5 py-0.5 rounded {% if selected_account_id == acc.id|stringformat:'s' %}bg-emerald-700/60 text-emerald-100{% else %}bg-slate-200/80 dark:bg-zinc-700/80 text-slate-700 dark:text-zinc-300{% endif %}">
+                    {{ acc.statement_label }}
+                </span>
                 {% endif %}
                 <span
                     class="px-1.5 py-0.2 rounded-full text-[10px] font-mono {% if selected_account_id == acc.id|stringformat:'s' %}bg-emerald-700 text-emerald-100{% else %}bg-zinc-700 text-zinc-300{% endif %}">
