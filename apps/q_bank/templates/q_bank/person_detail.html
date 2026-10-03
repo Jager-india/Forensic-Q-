@@ -102,8 +102,7 @@
                     <span>Cash Deposit</span>
                     {% if cdm_rows %}
                     <span
-                        class="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500/15 text-rose-400 border border-rose-500/30">{{
-                        cdm_rows|length }}</span>
+                        class="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500/15 text-rose-400 border border-rose-500/30">{{ cdm_rows|length }}</span>
                     {% endif %}
                 </button>
 
@@ -115,8 +114,7 @@
                     <span>High Frequent Names</span>
                     {% if frequent_entities %}
                     <span
-                        class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/30">{{
-                        frequent_entities|length }}</span>
+                        class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/30">{{ frequent_entities|length }}</span>
                     {% endif %}
                 </button>
 
@@ -144,8 +142,7 @@
                     <span>Hyundai</span>
                     {% if hyundai.total_count %}
                     <span
-                        class="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500/15 text-blue-400 border border-blue-500/30">{{
-                        hyundai.total_count }}</span>
+                        class="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500/15 text-blue-400 border border-blue-500/30">{{ hyundai.total_count }}</span>
                     {% endif %}
                 </button>
 
@@ -195,8 +192,7 @@
                                 <td class="p-3 font-semibold text-emerald-400">{{ row.name }}</td>
                                 <td class="p-3 text-right text-rose-400">₹{{ row.debit_formatted }}</td>
                                 <td class="p-3 text-right text-emerald-400 font-bold">₹{{ row.credit_formatted }}</td>
-                                <td class="p-3 text-right text-slate-300 font-semibold">₹{{
-                                    row.closing_balance_formatted }}</td>
+                                <td class="p-3 text-right text-slate-300 font-semibold">₹{{ row.closing_balance_formatted }}</td>
                                 <td class="p-3 text-slate-400">{{ row.source_page }}</td>
                                 <td class="p-3 text-slate-300">{{ row.upi_name }}</td>
                             </tr>
@@ -522,8 +518,7 @@
                                 <td class="p-3 font-bold text-slate-900 dark:text-white text-sm">{{ yw.year }}</td>
                                 <td class="p-3 text-right text-rose-400 font-semibold">₹{{ yw.total_debit_formatted }}
                                 </td>
-                                <td class="p-3 text-right text-emerald-400 font-semibold">₹{{ yw.total_credit_formatted
-                                    }}</td>
+                                <td class="p-3 text-right text-emerald-400 font-semibold">₹{{ yw.total_credit_formatted }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -550,26 +545,22 @@
                     <div
                         class="p-4 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
                         <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">Total Debit</div>
-                        <div class="text-2xl font-black text-rose-500 mt-1 font-mono">₹{{ hyundai.total_debit_formatted
-                            }}</div>
+                        <div class="text-2xl font-black text-rose-500 mt-1 font-mono">₹{{ hyundai.total_debit_formatted }}</div>
                     </div>
                     <div
                         class="p-4 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
                         <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">Total Credit</div>
-                        <div class="text-2xl font-black text-emerald-500 mt-1 font-mono">₹{{
-                            hyundai.total_credit_formatted }}</div>
+                        <div class="text-2xl font-black text-emerald-500 mt-1 font-mono">₹{{ hyundai.total_credit_formatted }}</div>
                     </div>
                     <div
                         class="p-4 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
                         <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">Times Credited</div>
-                        <div class="text-2xl font-black text-slate-900 dark:text-white mt-1 font-mono">{{
-                            hyundai.credit_count }}</div>
+                        <div class="text-2xl font-black text-slate-900 dark:text-white mt-1 font-mono">{{ hyundai.credit_count }}</div>
                     </div>
                     <div
                         class="p-4 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
                         <div class="text-xs font-medium text-slate-500 dark:text-zinc-400">Avg Credit Value</div>
-                        <div class="text-2xl font-black text-emerald-500 mt-1 font-mono">₹{{
-                            hyundai.avg_credit_formatted }}</div>
+                        <div class="text-2xl font-black text-emerald-500 mt-1 font-mono">₹{{ hyundai.avg_credit_formatted }}</div>
                     </div>
                 </div>
 
@@ -764,8 +755,7 @@
             <div class="flex flex-wrap items-center justify-between gap-4 pt-4">
                 <p class="text-xs text-slate-500 dark:text-zinc-400">
                     {% if selected_account %}
-                    Displaying records for <strong>{{ selected_account.bank_name }}</strong> (Acc: {{
-                    selected_account.account_number|default:"N/A" }}).
+                    Displaying records for <strong>{{ selected_account.bank_name }}</strong> (Acc: {{ selected_account.account_number|default:"N/A" }}).
                     {% else %}
                     Displaying aggregate records across all <strong>{{ accounts|length }}</strong> bank statement files.
                     {% endif %}
@@ -805,8 +795,7 @@
                 <i class="fa-solid fa-cloud-arrow-up text-emerald-400"></i>
                 <span>Attach Bank Statement to Person</span>
             </h3>
-            <p class="text-xs text-slate-400 mb-5">Upload another bank statement for <strong>{{ person.full_name
-                    }}</strong> (Excel, CSV, Word, or PDF).</p>
+            <p class="text-xs text-slate-400 mb-5">Upload another bank statement for <strong>{{ person.full_name }}</strong> (Excel, CSV, Word, or PDF).</p>
 
             <form method="POST" action="{% url 'q_bank:upload_statement' %}" enctype="multipart/form-data"
                 class="space-y-4">
