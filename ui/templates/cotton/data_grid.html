@@ -26,15 +26,6 @@
     </div>
     {% endif %}
 
-    <!-- Top Pagination Controls -->
-    <div class="flex items-center justify-end pb-3 mb-2 border-b border-slate-200 dark:border-zinc-800">
-        <div class="tabulator border-0 bg-transparent">
-            <div class="tabulator-footer border-0 bg-transparent p-0">
-                <div id="{{ id }}-top-pagination" class="tabulator-paginator flex flex-wrap items-center gap-1 text-xs text-slate-500 dark:text-zinc-400 select-none"></div>
-            </div>
-        </div>
-    </div>
-
     <!-- Container where Tabulator will mount the table -->
     <div id="{{ id }}" class="w-full"></div>
 </div>
@@ -46,7 +37,7 @@
         const rawData = {{ data|default:"[]"|safe }};
         const rawCols = {{ columns|default:"[]"|safe }};
 
-        const table = new Tabulator("#{{ id }}", {
+        window["tabulator_{{ id|slugify }}"] = new Tabulator("#{{ id }}", {
             data: rawData,
             columns: rawCols,
             layout: "{{ layout|default:'fitColumns' }}",
@@ -57,11 +48,5 @@
             responsiveLayout: {{ responsive|default:'"collapse"' }},
             placeholder: "No records found.",
         });
-
-        window["tabulator_{{ id|slugify }}"] = table;
-
-        if (typeof window.setupTopPaginationSync === "function") {
-            window.setupTopPaginationSync(table, "#{{ id }}", "#{{ id }}-top-pagination");
-        }
     });
 </script>

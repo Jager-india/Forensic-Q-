@@ -427,14 +427,6 @@
                 <span class="text-xs font-mono text-slate-400">Interactive Forensic Grid</span>
             </div>
 
-            <!-- Top Pagination Controls -->
-            <div class="flex items-center justify-end mb-2.5">
-                <div class="tabulator border-0 bg-transparent">
-                    <div class="tabulator-footer border-0 bg-transparent p-0">
-                        <div id="emails-top-pagination" class="tabulator-paginator flex flex-wrap items-center gap-1 text-xs text-slate-500 dark:text-zinc-400 select-none"></div>
-                    </div>
-                </div>
-            </div>
 
             <div id="emails-table" class="rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 shadow-sm text-xs"></div>
         </div>
@@ -676,7 +668,6 @@
                 ]
             });
 
-            setupTopPaginationSync(table, '#emails-table', '#emails-top-pagination');
 
             table.on("rowClick", function(e, row) {
                 const rowData = row.getData();
