@@ -40,7 +40,7 @@ DEBUG = os.environ.get("DEBUG", "False").strip().lower() in ("true", "1", "yes",
 # Allowed hosts parsed from comma-separated string
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+    for host in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost,testserver").split(",")
     if host.strip()
 ]
 

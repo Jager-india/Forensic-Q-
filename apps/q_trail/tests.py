@@ -602,6 +602,39 @@ class QTrailServiceTests(TestCase):
         self.assertTrue(CaseDossier.objects.filter(id=res["case_dossier"].id).exists())
         self.assertTrue(FundTrailPath.objects.filter(case=res["case_dossier"]).exists())
 
+    def test_workstation_v2_chronological_beats_and_conduit_deck(self):
+        """Verifies that workstation builders generate beats, scored conduit deck, and topology graph."""
+        res = analyze_profiles_money_trail(
+            [str(self.person_a.id), str(self.person_b.id)],
+            time_window_days=3,
+        )
+        self.assertEqual(res["status"], "success")
+        # 1. Chronological beats
+        beats = res.get("chronological_beats", [])
+        self.assertIsInstance(beats, list)
+        self.assertTrue(len(beats) >= 1)
+        first_beat = beats[0]
+        self.assertIn("n", first_beat)
+        self.assertIn("kind", first_beat)
+        self.assertIn("title", first_beat)
+        self.assertIn("cumulative_retained", first_beat)
+
+        # 2. Conduit Deck
+        deck = res.get("conduit_deck", [])
+        self.assertIsInstance(deck, list)
+        if deck:
+            c = deck[0]
+            self.assertIn("scores", c)
+            self.assertIn("composite", c["scores"])
+            self.assertIn("flags", c)
+
+        # 3. Topology Graph
+        graph = res.get("topology_graph", {})
+        self.assertIn("W", graph)
+        self.assertIn("H", graph)
+        self.assertIn("nodes", graph)
+        self.assertIn("edges", graph)
+
 
 class QTrailViewTests(TestCase):
     """Tests for Q-Trail views, dashboard rendering, and API endpoint."""
@@ -689,9 +722,48 @@ class QTrailViewTests(TestCase):
         )
         self.assertEqual(response_bad.status_code, 400)
 
+    def test_dashboard_view_contains_workstation_v2_data(self):
+        """Verifies dashboard view renders workstation global data and components."""
+        url = reverse("q_trail:dashboard")
+        response = self.client.get(
+            url,
+            {"profile_ids": f"{self.person_a.id},{self.person_b.id}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode("utf-8")
+        self.assertIn("window.beatsData", content)
+        self.assertIn("window.conduitDeckData", content)
+        self.assertIn("window.topologyGraphData", content)
+        self.assertIn("Multi-Hop Fund Flow Topology", content)
+        self.assertIn("Trace the Money Timeline", content)
+
 
 class QTrailExtendedCoverageTests(TestCase):
     """Additional tests to exercise case retrieval, core profile synchronization, and self-loops."""
+
+    def setUp(self):
+        self.person_a = AuditedPerson.objects.create(full_name="Ext Person A")
+        self.acc_a = BankAccount.objects.create(
+            person=self.person_a, account_number="EXT_A", bank_name="HDFC"
+        )
+        self.person_b = AuditedPerson.objects.create(full_name="Ext Person B")
+        self.acc_b = BankAccount.objects.create(
+            person=self.person_b, account_number="EXT_B", bank_name="ICICI"
+        )
+
+        now = timezone.now()
+        BankTransaction.objects.create(
+            account=self.acc_a,
+            txn_date=now,
+            narration="UPI-111222333444-EXT PERSON B-b@okhdfc-PAYMENT",
+            debit_amount=Decimal("25000.00"),
+        )
+        BankTransaction.objects.create(
+            account=self.acc_b,
+            txn_date=now,
+            narration="BIL/IN/UPI/111222333444/Ext Person A/a@okhdfc/HDFC0000123",
+            credit_amount=Decimal("25000.00"),
+        )
 
     def test_get_all_trail_cases_and_paths_by_case(self):
         case = CaseDossier.objects.create(

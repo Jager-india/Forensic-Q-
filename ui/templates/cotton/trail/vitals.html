@@ -1,0 +1,102 @@
+<c-vars
+    direct_volume="0.00"
+    direct_count="0"
+    outflow_volume="0.00"
+    hops_count="0"
+    retained_volume="0.00"
+    conduits_count="0"
+    loop_count="0"
+    total_retained="0.00"
+/>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 mb-6">
+    <!-- 1. Direct Volume -->
+    <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3.5 shadow-sm hover:border-emerald-500/40 transition">
+        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400 mb-1">
+            <span class="font-semibold text-slate-700 dark:text-zinc-300">Direct Volume</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono">Rule 1</span>
+        </div>
+        <div class="text-lg font-bold font-mono text-slate-900 dark:text-white">
+            ₹{{ direct_volume }}
+        </div>
+        <div class="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 truncate">
+            {{ direct_count }} direct transfers
+        </div>
+    </div>
+
+    <!-- 2. Direct Transfers Count -->
+    <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3.5 shadow-sm hover:border-teal-500/40 transition">
+        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400 mb-1">
+            <span class="font-semibold text-slate-700 dark:text-zinc-300">Direct Matches</span>
+            <i class="fa-solid fa-link text-teal-400 text-xs"></i>
+        </div>
+        <div class="text-lg font-bold font-mono text-slate-900 dark:text-white">
+            {{ direct_count }}
+        </div>
+        <div class="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 truncate">
+            Exact UTR &amp; fuzzy pairs
+        </div>
+    </div>
+
+    <!-- 3. Via Conduits -->
+    <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3.5 shadow-sm hover:border-sky-500/40 transition group relative">
+        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400 mb-1">
+            <span class="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                Via Conduits
+                <i class="fa-solid fa-circle-info text-[10px] text-sky-400 cursor-help" title="Total volume channeled through 1-hop pass-through lanes."></i>
+            </span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 font-mono">Rule 2</span>
+        </div>
+        <div class="text-lg font-bold font-mono text-sky-400">
+            ₹{{ outflow_volume }}
+        </div>
+        <div class="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 truncate">
+            {{ hops_count }} pass-through hops
+        </div>
+    </div>
+
+    <!-- 4. Retained in Transit -->
+    <div class="bg-white dark:bg-zinc-900 border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 rounded-xl p-3.5 shadow-sm hover:border-amber-500 transition">
+        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400 mb-1">
+            <span class="font-semibold text-amber-500 dark:text-amber-400 flex items-center gap-1">
+                Retained in Transit
+                <i class="fa-solid fa-triangle-exclamation text-[10px] text-amber-400"></i>
+            </span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold font-mono">Leakage</span>
+        </div>
+        <div class="text-lg font-bold font-mono text-amber-500 dark:text-amber-400">
+            ₹{{ retained_volume }}
+        </div>
+        <div class="text-[11px] text-amber-600 dark:text-amber-300/80 mt-1 truncate">
+            Withheld fees &amp; margins
+        </div>
+    </div>
+
+    <!-- 5. Intermediary Entities -->
+    <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3.5 shadow-sm hover:border-rose-500/40 transition">
+        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400 mb-1">
+            <span class="font-semibold text-slate-700 dark:text-zinc-300">Intermediaries</span>
+            <i class="fa-solid fa-user-secret text-rose-400 text-xs"></i>
+        </div>
+        <div class="text-lg font-bold font-mono text-slate-900 dark:text-white">
+            {{ conduits_count }}
+        </div>
+        <div class="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 truncate">
+            Candidate pass-throughs
+        </div>
+    </div>
+
+    <!-- 6. Loop Closure -->
+    <div class="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3.5 shadow-sm hover:border-indigo-500/40 transition">
+        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400 mb-1">
+            <span class="font-semibold text-slate-700 dark:text-zinc-300">Loop Closure</span>
+            <i class="fa-solid fa-arrows-spin text-indigo-400 text-xs"></i>
+        </div>
+        <div class="text-lg font-bold font-mono text-indigo-400">
+            {{ loop_count }} Loops
+        </div>
+        <div class="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 truncate">
+            Control routing detected
+        </div>
+    </div>
+</div>

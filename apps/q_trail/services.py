@@ -29,6 +29,11 @@ from .backend.reconciliation import (
     group_intermediate_transfers_by_intermediary,
     reconcile_and_match_network,
 )
+from .backend.workstation_builder import (
+    build_chronological_beats,
+    build_conduit_deck,
+    build_topology_graph,
+)
 from .models import CaseDossier, FundTrailPath, PassThroughNode
 from .selectors import get_transactions_df_for_profile
 
@@ -98,6 +103,17 @@ def analyze_profiles_money_trail(
         "intermediate_transfers": pd.DataFrame(),
         "grouped_intermediaries": {},
         "circular_trails": [],
+        "chronological_beats": [],
+        "conduit_deck": [],
+        "topology_graph": {
+            "W": 1060,
+            "H": 580,
+            "R": 18,
+            "nodes": [],
+            "edges": [],
+            "plates": [],
+            "cols": [],
+        },
         "metrics": {
             "total_profiles_analyzed": len(unique_profile_ids),
             "total_transactions_analyzed": 0,
@@ -450,6 +466,24 @@ def analyze_profiles_money_trail(
                         retention_pct=float(row["Retention_Pct"]),
                     )
 
+    # 8. Build Workstation V2 Interactive Structures
+    chronological_beats = build_chronological_beats(
+        direct_df=combined_direct,
+        intermediate_df=combined_intermediate,
+        circular_trails=circular_trails,
+    )
+    conduit_deck = build_conduit_deck(
+        grouped_intermediaries=grouped_intermediaries,
+        circular_trails=circular_trails,
+        max_delta_days=time_window_days,
+    )
+    topology_graph = build_topology_graph(
+        analyzed_profiles=profile_metadata,
+        direct_df=combined_direct,
+        intermediate_df=combined_intermediate,
+        circular_trails=circular_trails,
+    )
+
     return {
         "status": "success",
         "case_dossier": dossier_obj,
@@ -457,6 +491,9 @@ def analyze_profiles_money_trail(
         "intermediate_transfers": combined_intermediate,
         "grouped_intermediaries": grouped_intermediaries,
         "circular_trails": circular_trails,
+        "chronological_beats": chronological_beats,
+        "conduit_deck": conduit_deck,
+        "topology_graph": topology_graph,
         "pairwise_matrix": pairwise_matrix,
         "pairwise_summaries": pairwise_summaries,
         "metrics": metrics,

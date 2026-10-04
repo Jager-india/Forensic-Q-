@@ -1,0 +1,37 @@
+<c-vars
+    title="Why this loop reports ₹0.00 on both ends — and why that is not a dead end."
+/>
+
+<div class="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-950/20 text-slate-800 dark:text-zinc-200">
+    <div class="flex items-start justify-between gap-3 mb-2">
+        <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-500 dark:text-amber-400 flex items-center justify-center shrink-0 text-xs">
+                <i class="fa-solid fa-lightbulb"></i>
+            </span>
+            <h4 class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                {{ title }}
+            </h4>
+        </div>
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase tracking-wider">
+            Critical Forensic Finding
+        </span>
+    </div>
+
+    <p class="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed mb-3">
+        When a money trail returns with no net principal delta, standard audits often misclassify it as a value-neutral no-op.
+        In forensic finance, what actually moved is <strong>beneficial control</strong>: funds were deliberately layered through external,
+        unlinked intermediary entities or VPAs to obscure the audit trail, extract conduit commission margins, and break the chain of custody.
+    </p>
+
+    <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-600 dark:text-zinc-400">
+        <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">
+            <i class="fa-solid fa-arrows-split-up-and-left text-amber-500 mr-1"></i>Layering Mechanism
+        </span>
+        <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">
+            <i class="fa-solid fa-shield-halved text-rose-400 mr-1"></i>Beneficial Ownership Concealment
+        </span>
+        <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">
+            <i class="fa-solid fa-receipt text-emerald-400 mr-1"></i>Illicit Margin Skim
+        </span>
+    </div>
+</div>

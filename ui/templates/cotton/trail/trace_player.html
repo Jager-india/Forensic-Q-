@@ -1,0 +1,174 @@
+<c-vars
+    title="Trace the Money Timeline"
+/>
+
+<div class="bg-zinc-950 text-white rounded-xl p-4 border border-zinc-800 shadow-md mb-6"
+     x-data="{
+         beats: window.beatsData || [],
+         currentBeat: 0,
+         isPlaying: false,
+         speedMs: 2000,
+         timer: null,
+         get activeBeat() {
+             if (!this.beats || this.beats.length === 0) return null;
+             return this.beats[this.currentBeat] || this.beats[0];
+         },
+         startPlay() {
+             this.isPlaying = true;
+             this.scheduleNext();
+         },
+         pausePlay() {
+             this.isPlaying = false;
+             if (this.timer) {
+                 clearTimeout(this.timer);
+                 this.timer = null;
+             }
+         },
+         togglePlay() {
+             if (this.isPlaying) {
+                 this.pausePlay();
+             } else {
+                 if (this.currentBeat >= this.beats.length - 1) {
+                     this.currentBeat = 0;
+                 }
+                 this.startPlay();
+             }
+         },
+         scheduleNext() {
+             if (!this.isPlaying) return;
+             this.timer = setTimeout(() => {
+                 if (this.currentBeat < this.beats.length - 1) {
+                     this.currentBeat++;
+                     this.$dispatch('beat-changed', { beat: this.activeBeat });
+                     this.scheduleNext();
+                 } else {
+                     this.pausePlay();
+                 }
+             }, this.speedMs);
+         },
+         setBeat(idx) {
+             this.pausePlay();
+             this.currentBeat = Math.max(0, Math.min(this.beats.length - 1, idx));
+             this.$dispatch('beat-changed', { beat: this.activeBeat });
+         }
+     }"
+     @trace-conduit.window="
+         const found = beats.findIndex(b => b.via && b.via.toLowerCase().includes($event.detail.name.toLowerCase()));
+         if (found !== -1) setBeat(found);
+     ">
+
+    <!-- Top Transport Bar & Active Beat Headline -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-800 pb-3 mb-3">
+        <!-- Transport Controls -->
+        <div class="flex items-center gap-2">
+            <span class="text-[11px] font-bold tracking-wider uppercase text-zinc-400 mr-1 select-none">
+                <i class="fa-solid fa-film text-amber-500 mr-1"></i>Trace
+            </span>
+
+            <button type="button" @click="setBeat(currentBeat - 1)" :disabled="currentBeat === 0"
+                    class="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-xs transition cursor-pointer"
+                    title="Previous transaction leg">
+                <i class="fa-solid fa-backward-step"></i>
+            </button>
+
+            <button type="button" @click="togglePlay()"
+                    class="px-3 h-7 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold flex items-center gap-1.5 text-xs transition cursor-pointer shadow-sm shadow-amber-500/30"
+                    :title="isPlaying ? 'Pause replay' : 'Play money trail replay'">
+                <i class="fa-solid" :class="isPlaying ? 'fa-pause' : 'fa-play'"></i>
+                <span x-text="isPlaying ? 'Pause' : 'Play'"></span>
+            </button>
+
+            <button type="button" @click="setBeat(currentBeat + 1)" :disabled="currentBeat >= beats.length - 1"
+                    class="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-xs transition cursor-pointer"
+                    title="Next transaction leg">
+                <i class="fa-solid fa-forward-step"></i>
+            </button>
+
+            <button type="button" @click="setBeat(beats.length - 1)"
+                    class="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-xs transition cursor-pointer"
+                    title="Jump to final case position">
+                <i class="fa-solid fa-forward-fast"></i>
+            </button>
+
+            <!-- Speed selector -->
+            <div class="flex items-center gap-1 ml-2 bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 text-[11px] font-mono">
+                <button type="button" @click="speedMs = 2000"
+                        :class="speedMs === 2000 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-zinc-400 hover:text-white'"
+                        class="px-2 py-0.5 rounded transition cursor-pointer">1&times;</button>
+                <button type="button" @click="speedMs = 1000"
+                        :class="speedMs === 1000 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-zinc-400 hover:text-white'"
+                        class="px-2 py-0.5 rounded transition cursor-pointer">2&times;</button>
+            </div>
+        </div>
+
+        <!-- Active Beat Info -->
+        <template x-if="activeBeat">
+            <div class="flex items-center gap-3">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-mono font-bold text-amber-500" x-text="'Beat ' + activeBeat.n + ' / ' + beats.length"></span>
+                        <span class="font-bold text-xs text-white" x-text="activeBeat.title"></span>
+                        <template x-if="activeBeat.amount > 0">
+                            <span class="font-mono text-xs text-emerald-400 font-bold" x-text="'₹' + Number(activeBeat.amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                        </template>
+                    </div>
+                    <div class="text-[11px] text-zinc-400 truncate max-w-md" x-text="activeBeat.cap"></div>
+                </div>
+
+                <!-- Beat Kind Badge -->
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider shrink-0"
+                      :class="{
+                          'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': activeBeat.kind === 'direct',
+                          'bg-sky-500/20 text-sky-400 border border-sky-500/30': activeBeat.kind === 'hop',
+                          'bg-rose-500/20 text-rose-400 border border-rose-500/30': activeBeat.kind === 'return',
+                          'bg-zinc-800 text-zinc-400 border border-zinc-700': activeBeat.kind === 'summary'
+                      }"
+                      x-text="activeBeat.kind === 'direct' ? 'Rule 1 · Direct' : (activeBeat.kind === 'hop' ? 'Rule 2 · 1-Hop' : (activeBeat.kind === 'return' ? 'Loop Closer' : 'Full Summary'))">
+                </span>
+            </div>
+        </template>
+    </div>
+
+    <!-- Timeline Scrubber Rail -->
+    <div class="relative py-2 select-none">
+        <!-- Track Background -->
+        <div class="h-1.5 w-full bg-zinc-800 rounded-full relative overflow-hidden">
+            <!-- Progress Fill -->
+            <div class="h-full bg-amber-500 transition-all duration-300"
+                 :style="'width: ' + ((currentBeat / Math.max(1, beats.length - 1)) * 100) + '%'"></div>
+        </div>
+
+        <!-- Beat Ticks -->
+        <div class="flex items-center justify-between -mt-3.5 relative z-10 px-0.5">
+            <template x-for="(b, idx) in beats" :key="idx">
+                <button type="button" @click="setBeat(idx)"
+                        class="w-5 h-5 rounded-full flex items-center justify-center font-mono text-[9px] transition-all cursor-pointer border"
+                        :class="idx === currentBeat ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 scale-110 shadow-sm shadow-amber-500/50' : (idx < currentBeat ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:border-zinc-500' : 'bg-zinc-900 text-zinc-600 border-zinc-800 hover:border-zinc-700')"
+                        :title="'Beat ' + b.n + ': ' + b.title">
+                    <span x-text="b.n"></span>
+                </button>
+            </template>
+        </div>
+    </div>
+
+    <!-- Footer Stats Row -->
+    <div class="flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-zinc-400 pt-2 border-t border-zinc-800/80">
+        <div>
+            <template x-if="activeBeat && activeBeat.retained > 0">
+                <span>
+                    Withheld on this leg:
+                    <strong class="text-amber-400" x-text="'₹' + Number(activeBeat.retained).toLocaleString('en-IN', {minimumFractionDigits: 2})"></strong>
+                </span>
+            </template>
+            <template x-if="!activeBeat || activeBeat.retained === 0">
+                <span>No fee retained on this leg</span>
+            </template>
+        </div>
+
+        <div>
+            <span>Cumulative Leakage: </span>
+            <strong class="text-amber-400 text-sm"
+                    x-text="'₹' + Number(activeBeat ? activeBeat.cumulative_retained : 0).toLocaleString('en-IN', {minimumFractionDigits: 2})"></strong>
+        </div>
+    </div>
+</div>

@@ -163,6 +163,10 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
     # Saved case dossiers for reference
     saved_cases = get_all_trail_cases()[:5]
 
+    chronological_beats = analysis.get("chronological_beats", [])
+    conduit_deck = analysis.get("conduit_deck", [])
+    topology_graph = analysis.get("topology_graph", {})
+
     context = {
         "available_profiles": available_profiles,
         "selected_profile_ids": profile_ids,
@@ -174,6 +178,12 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
         "intermediate_records": intermediate_records,
         "intermediate_records_json": json.dumps(intermediate_records),
         "circular_trails": circular_trails,
+        "chronological_beats": chronological_beats,
+        "beats_json": json.dumps(chronological_beats),
+        "conduit_deck": conduit_deck,
+        "conduit_deck_json": json.dumps(conduit_deck),
+        "topology_graph": topology_graph,
+        "topology_graph_json": json.dumps(topology_graph),
         "analyzed_profiles": analyzed_profiles,
         "profile_names": profile_names,
         "pairwise_matrix": formatted_matrix,
@@ -225,6 +235,9 @@ def analyze_api_view(request: HttpRequest) -> JsonResponse:
             "direct_transfers": direct_records,
             "intermediate_transfers": intermediate_records,
             "circular_trails": analysis["circular_trails"],
+            "chronological_beats": analysis.get("chronological_beats", []),
+            "conduit_deck": analysis.get("conduit_deck", []),
+            "topology_graph": analysis.get("topology_graph", {}),
             "pairwise_matrix": analysis.get("pairwise_matrix", {}),
             "pairwise_summaries": analysis.get("pairwise_summaries", []),
             "sankey_html": sankey_html,
