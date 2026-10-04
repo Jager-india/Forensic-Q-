@@ -6,52 +6,67 @@ Thin presentation controllers coordinating chat selectors, services, and Cotton 
 from django.contrib import messages
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from .selectors import (
     get_all_chat_channels,
+    get_all_custodian_profiles,
     get_chat_channel_by_id,
     get_chat_dashboard_metrics,
     get_chat_participants_summary,
+    get_custodian_profile_detail,
     get_paginated_chat_messages,
 )
-from .services import delete_chat_channel, ingest_chat_export_file
+from .services import (
+    delete_chat_channel,
+    delete_custodian_channels,
+    ingest_chat_export_file,
+)
 
 
 @require_GET
 def dashboard_view(request: HttpRequest) -> HttpResponse:
     """
     Main Q-Chat Instant Messaging Forensics Dashboard.
+    Organized by target custodian profile directory with aggregate metrics.
     """
     metrics = get_chat_dashboard_metrics()
+    custodians = get_all_custodian_profiles()
     channels = get_all_chat_channels()
 
     context = {
         "metrics": metrics,
+        "custodians": custodians,
         "channels": channels,
     }
     return render(request, "q_chat/dashboard.html", context)
 
 
 @require_GET
-def channel_detail_view(request: HttpRequest, channel_id: str) -> HttpResponse:
+def custodian_detail_view(request: HttpRequest, custodian_name: str) -> HttpResponse:
     """
-    Forensic Workspace for a specific Chat Channel.
-    Displays interactive message bubbles, participant breakdown, and risk filters.
+    Forensic Profile Analysis Workspace for a specific Custodian.
+    Provides multi-chat combined timeline or scoped channel analysis.
     """
-    channel = get_chat_channel_by_id(channel_id)
-    if not channel:
-        raise Http404("Chat Channel not found.")
+    custodian_info = get_custodian_profile_detail(custodian_name)
+    if not custodian_info["channels"]:
+        raise Http404("No chat records found for this custodian profile.")
 
-    participants = get_chat_participants_summary(channel.id)
+    channels = custodian_info["channels"]
+    selected_channel_id = request.GET.get("channel_id", "").strip() or None
+    selected_channel = None
+    if selected_channel_id:
+        selected_channel = next((c for c in channels if str(c.id) == selected_channel_id), None)
 
-    # Initial page of messages for server-side rendering
+    # Active query parameters
     search = request.GET.get("q", "").strip()
     sender = request.GET.get("sender", "").strip()
     flagged_only = request.GET.get("flagged") == "1"
     media_only = request.GET.get("media") == "1"
     deleted_only = request.GET.get("deleted") == "1"
     right_sender = request.GET.get("right", "").strip() or request.GET.get("me", "").strip()
+
     try:
         page = int(request.GET.get("page", 1))
     except (ValueError, TypeError):
@@ -59,8 +74,17 @@ def channel_detail_view(request: HttpRequest, channel_id: str) -> HttpResponse:
     if page < 1:
         page = 1
 
-    msg_data = get_paginated_chat_messages(
-        channel.id,
+    query_channel_id = selected_channel.id if selected_channel else None
+    query_custodian_name = None if selected_channel else custodian_name
+
+    participants = get_chat_participants_summary(
+        channel_id=query_channel_id,
+        custodian_name=query_custodian_name,
+    )
+
+    messages_data = get_paginated_chat_messages(
+        channel_id=query_channel_id,
+        custodian_name=query_custodian_name,
         page=page,
         page_size=100,
         search=search,
@@ -72,18 +96,57 @@ def channel_detail_view(request: HttpRequest, channel_id: str) -> HttpResponse:
         right_sender=right_sender,
     )
 
+    if selected_channel:
+        view_total_messages = selected_channel.total_messages
+        view_flagged_messages = selected_channel.flagged_messages_count
+        view_channel_title = selected_channel.channel_name
+        view_platform = selected_channel.get_platform_display()
+    else:
+        view_total_messages = custodian_info["total_messages"]
+        view_flagged_messages = custodian_info["flagged_messages_count"]
+        view_channel_title = "All Chats Combined"
+        view_platform = f"{len(channels)} Channels"
+
     context = {
-        "channel": channel,
+        "custodian": custodian_info,
+        "custodian_name": custodian_name,
+        "channels": channels,
+        "selected_channel": selected_channel,
+        "selected_channel_id": str(selected_channel.id) if selected_channel else "",
+        "view_metrics": {
+            "total_messages": view_total_messages,
+            "flagged_messages": view_flagged_messages,
+            "channel_title": view_channel_title,
+            "platform": view_platform,
+            "participant_count": len(participants),
+        },
         "participants": participants,
-        "messages_data": msg_data,
+        "messages_data": messages_data,
         "search_query": search,
         "selected_sender": sender,
         "flagged_only": flagged_only,
         "media_only": media_only,
         "deleted_only": deleted_only,
-        "right_sender": msg_data.get("right_sender", ""),
+        "right_sender": messages_data.get("right_sender", ""),
     }
-    return render(request, "q_chat/channel_detail.html", context)
+    return render(request, "q_chat/custodian_detail.html", context)
+
+
+@require_GET
+def channel_detail_view(request: HttpRequest, channel_id: str) -> HttpResponse:
+    """
+    Forensic Workspace for a specific Chat Channel.
+    Delegates to custodian profile analysis with the channel selected.
+    """
+    channel = get_chat_channel_by_id(channel_id)
+    if not channel:
+        raise Http404("Chat Channel not found.")
+
+    custodian_name = channel.custodian_name.strip() or "General Custodian"
+    request_params = request.GET.copy()
+    request_params["channel_id"] = str(channel.id)
+    request.GET = request_params
+    return custodian_detail_view(request, custodian_name=custodian_name)
 
 
 @require_POST
@@ -122,10 +185,27 @@ def upload_chat_view(request: HttpRequest) -> HttpResponse:
             request,
             f"Successfully ingested {channel.total_messages:,} messages into '{channel.channel_name}' ({channel.get_platform_display()}).",
         )
-        return redirect("q_chat:channel_detail", channel_id=channel.id)
+        target_cust = channel.custodian_name.strip() or "General Custodian"
+        redirect_url = reverse("q_chat:custodian_detail", kwargs={"custodian_name": target_cust})
+        return redirect(f"{redirect_url}?channel_id={channel.id}")
     except Exception as e:
         messages.error(request, f"Failed to ingest chat export file: {e}")
         return redirect("q_chat:dashboard")
+
+
+@require_POST
+def delete_custodian_view(request: HttpRequest, custodian_name: str) -> HttpResponse:
+    """
+    Deletes all chat channels and messages for a custodian profile.
+    """
+    count = delete_custodian_channels(custodian_name)
+    if count > 0:
+        messages.success(
+            request, f"Successfully deleted {count} chat channel(s) for '{custodian_name}'."
+        )
+    else:
+        messages.error(request, "Target custodian chat records could not be found.")
+    return redirect("q_chat:dashboard")
 
 
 @require_POST

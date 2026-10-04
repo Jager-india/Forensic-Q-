@@ -11,9 +11,11 @@ from .backend.chat_parser import (
     parse_whatsapp_export,
 )
 from .selectors import (
+    get_all_custodian_profiles,
     get_chat_channel_by_id,
     get_chat_dashboard_metrics,
     get_chat_participants_summary,
+    get_custodian_profile_detail,
     get_paginated_chat_messages,
 )
 from .services import ingest_chat_export_file
@@ -299,3 +301,55 @@ class QChatForensicTests(TestCase):
 
         pag_deleted = get_paginated_chat_messages(self.channel.id, deleted_only=True)
         self.assertEqual(pag_deleted["total_count"], 1)
+
+    def test_custodian_profile_analysis_and_directory(self):
+        # Ingest another chat under Arun Kumar
+        extra_chat = (
+            "25/04/2024, 14:00 - Arun Kumar: Following up on tender delivery.\n"
+            "25/04/2024, 14:05 - Vendor Lead: Delivery scheduled for Friday.\n"
+        )
+        ingest_chat_export_file(
+            file_obj_or_content=extra_chat,
+            filename="tender_delivery.txt",
+            platform="TEAMS",
+            channel_name="Tender Delivery Followup",
+            custodian_name="Arun Kumar",
+        )
+
+        # 1. Test get_all_custodian_profiles
+        profiles = get_all_custodian_profiles()
+        self.assertGreaterEqual(len(profiles), 1)
+        arun_profile = next((p for p in profiles if p["custodian_name"] == "Arun Kumar"), None)
+        self.assertIsNotNone(arun_profile)
+        self.assertEqual(arun_profile["channels_count"], 2)
+        self.assertEqual(arun_profile["total_messages"], 7)
+
+        # 2. Test get_custodian_profile_detail
+        arun_detail = get_custodian_profile_detail("Arun Kumar")
+        self.assertEqual(arun_detail["channels_count"], 2)
+        self.assertEqual(arun_detail["total_messages"], 7)
+
+        # 3. Test combined messages
+        combined_msgs = get_paginated_chat_messages(custodian_name="Arun Kumar")
+        self.assertEqual(combined_msgs["total_count"], 7)
+
+        # 4. Test custodian views
+        session = self.client.session
+        session["portal_authenticated"] = True
+        session.save()
+
+        # Combined view
+        res_view = self.client.get(reverse("q_chat:custodian_detail", args=["Arun Kumar"]))
+        self.assertEqual(res_view.status_code, 200)
+
+        # Scoped view
+        res_scoped = self.client.get(
+            reverse("q_chat:custodian_detail", args=["Arun Kumar"])
+            + f"?channel_id={self.channel.id}"
+        )
+        self.assertEqual(res_scoped.status_code, 200)
+
+        # Delete custodian
+        res_del = self.client.post(reverse("q_chat:delete_custodian", args=["Arun Kumar"]))
+        self.assertEqual(res_del.status_code, 302)
+        self.assertEqual(len(get_all_custodian_profiles()), 0)

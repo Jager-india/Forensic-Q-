@@ -48,113 +48,108 @@
             variant="amber" />
     </div>
 
-    <!-- Main Channels Grid -->
+    <!-- Main Custodians Directory (Profile-based like Q-Bank) -->
     <div class="mb-8" x-data="{
         searchQuery: '',
-        matches(name, cust, plat) {
+        matches(name, dept, emp, chats) {
             if (!this.searchQuery) return true;
             const q = this.searchQuery.toLowerCase().trim();
-            return (name + ' ' + cust + ' ' + plat).toLowerCase().includes(q);
+            return (name + ' ' + dept + ' ' + emp + ' ' + chats).toLowerCase().includes(q);
         }
     }">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
                 <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <i class="fa-solid fa-comments text-sky-400"></i>
-                    <span>Audited Chat Channels Directory</span>
+                    <i class="fa-solid fa-id-card-clip text-sky-400"></i>
+                    <span>Target Custodians Directory</span>
                 </h3>
                 <p class="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                    Click any conversation to reconstruct full chat bubble streams, audit participant timelines, and inspect flagged off-channel messages.
+                    Click any target custodian to explore all their linked chat channels, combined message streams, and forensic thread analysis.
                 </p>
             </div>
             
             <div class="flex items-center gap-3">
                 <div class="relative w-full sm:w-64">
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                    <input type="text" x-model="searchQuery" placeholder="Search chat channels directory..."
+                    <input type="text" x-model="searchQuery" placeholder="Search custodians directory..."
                         class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-sky-500">
                     <button type="button" x-show="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
                         <i class="fa-solid fa-xmark text-xs"></i>
                     </button>
                 </div>
-                <span class="text-xs font-mono text-slate-400 font-semibold whitespace-nowrap">{{ channels|length }} Channel(s) Configured</span>
+                <span class="text-xs font-mono text-slate-400 font-semibold whitespace-nowrap">{{ custodians|length }} Custodian(s) Configured</span>
             </div>
         </div>
 
-        {% if channels %}
+        {% if custodians %}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {% for ch in channels %}
-                <div x-show="matches('{{ ch.channel_name|escapejs }}', '{{ ch.custodian_name|escapejs }}', '{{ ch.get_platform_display|escapejs }}')"
+                {% for c in custodians %}
+                <div x-show="matches('{{ c.custodian_name|escapejs }}', '{{ c.department|escapejs }}', '{{ c.employee_id|escapejs }}', '{% for ch in c.channels %}{{ ch.channel_name|escapejs }} {{ ch.get_platform_display|escapejs }} {% endfor %}')"
                      class="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 p-5 shadow-sm hover:border-sky-500/50 dark:hover:border-sky-500/40 transition-all flex flex-col justify-between">
                     <div>
-                        <!-- Header / Platform Badge -->
+                        <!-- Custodian Header -->
                         <div class="flex items-start justify-between gap-3 mb-3">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-xl {% if ch.platform == 'WHATSAPP' %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20{% elif ch.platform == 'TEAMS' %}bg-blue-500/10 text-blue-400 border border-blue-500/20{% elif ch.platform == 'SLACK' %}bg-purple-500/10 text-purple-400 border border-purple-500/20{% else %}bg-sky-500/10 text-sky-400 border border-sky-500/20{% endif %} flex items-center justify-center font-bold shrink-0 text-base">
-                                    {% if ch.platform == 'WHATSAPP' %}
-                                    <i class="fa-brands fa-whatsapp"></i>
-                                    {% elif ch.platform == 'TEAMS' %}
-                                    <i class="fa-brands fa-microsoft"></i>
-                                    {% elif ch.platform == 'SLACK' %}
-                                    <i class="fa-brands fa-slack"></i>
-                                    {% elif ch.platform == 'TELEGRAM' %}
-                                    <i class="fa-brands fa-telegram"></i>
-                                    {% else %}
-                                    <i class="fa-solid fa-comment-dots"></i>
-                                    {% endif %}
+                                <div class="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 font-bold shrink-0 text-base">
+                                    <i class="fa-solid fa-user-tie"></i>
                                 </div>
                                 <div class="truncate">
-                                    <h4 class="font-bold text-slate-900 dark:text-white text-sm truncate hover:text-sky-400 transition cursor-pointer" onclick="window.location.href='{% url 'q_chat:channel_detail' ch.id %}'">
-                                        {{ ch.channel_name }}
+                                    <h4 class="font-bold text-slate-900 dark:text-white text-sm truncate hover:text-sky-400 transition cursor-pointer" onclick="window.location.href='{% url 'q_chat:custodian_detail' c.custodian_name %}'">
+                                        {{ c.custodian_name }}
                                     </h4>
                                     <div class="text-[11px] text-slate-400 font-mono truncate">
-                                        {% if ch.custodian_name %}Custodian: {{ ch.custodian_name }} • {% endif %}{{ ch.get_platform_display }}
+                                        {{ c.department|default:"General Custodian" }}{% if c.employee_id %} • {{ c.employee_id }}{% endif %}
                                     </div>
                                 </div>
                             </div>
-                            {% if ch.flagged_messages_count > 0 %}
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 shrink-0">
-                                {{ ch.flagged_messages_count }} Flagged
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700 shrink-0">
+                                {{ c.channels_count }} Chat(s)
                             </span>
-                            {% else %}
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
-                                Clean
-                            </span>
-                            {% endif %}
                         </div>
 
-                        <!-- Channel Stat Summary Grid -->
+                        <!-- Aggregate Stats Grid (Exact 2x2 layout matching Q-Bank) -->
                         <div class="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-zinc-800/40 rounded-xl p-3 border border-slate-100 dark:border-zinc-800 text-xs font-mono mb-3">
                             <div>
                                 <span class="text-[10px] uppercase text-slate-400 block">Total Messages</span>
-                                <span class="font-bold text-slate-800 dark:text-zinc-200">{{ ch.total_messages }} records</span>
+                                <span class="font-bold text-slate-800 dark:text-zinc-200">{{ c.total_messages }} records</span>
                             </div>
                             <div>
-                                <span class="text-[10px] uppercase text-slate-400 block">Participants</span>
-                                <span class="font-bold text-sky-400">{{ ch.participant_count }} contacts</span>
+                                <span class="text-[10px] uppercase text-slate-400 block">Flagged (Risk)</span>
+                                <span class="font-bold {% if c.flagged_messages_count > 0 %}text-rose-500{% else %}text-emerald-500{% endif %}">{{ c.flagged_messages_count }} hits</span>
                             </div>
-                            <div class="pt-1 border-t border-slate-200/50 dark:border-zinc-700/50 col-span-2 flex items-center justify-between text-[11px]">
-                                <span class="text-slate-400">Date Range:</span>
-                                <span class="text-slate-300 font-semibold">
-                                    {% if ch.first_message_at and ch.last_message_at %}
-                                    {{ ch.first_message_at|date:"d M Y" }} - {{ ch.last_message_at|date:"d M Y" }}
-                                    {% else %}
-                                    N/A
-                                    {% endif %}
-                                </span>
+                            <div class="pt-1 border-t border-slate-200/50 dark:border-zinc-700/50">
+                                <span class="text-[10px] uppercase text-slate-400 block">Chat Threads</span>
+                                <span class="font-bold text-sky-400">{{ c.channels_count }} channel{% if c.channels_count != 1 %}s{% endif %}</span>
+                            </div>
+                            <div class="pt-1 border-t border-slate-200/50 dark:border-zinc-700/50">
+                                <span class="text-[10px] uppercase text-slate-400 block">Participants</span>
+                                <span class="font-bold text-slate-800 dark:text-zinc-200">{{ c.participant_count }} contacts</span>
                             </div>
                         </div>
 
-                        <!-- Participants Chips Preview -->
+                        <!-- Linked Chats Badges Preview (Exact structure matching Q-Bank) -->
                         <div class="mb-4">
-                            <span class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1 font-semibold">Top Participants:</span>
+                            <span class="text-[10px] uppercase tracking-wider text-slate-400 block mb-1 font-semibold">Linked Chats:</span>
                             <div class="flex flex-wrap gap-1.5">
-                                {% for p in ch.participants|slice:":4" %}
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700 truncate max-w-[130px]" title="{{ p }}">
-                                        {{ p }}
-                                    </span>
+                                {% for ch in c.channels %}
+                                    <a href="{% url 'q_chat:custodian_detail' c.custodian_name %}?channel_id={{ ch.id }}"
+                                       class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700 truncate max-w-[180px] hover:border-sky-500/50 transition-colors" 
+                                       title="{{ ch.channel_name }} ({{ ch.get_platform_display }}) • {{ ch.total_messages }} msgs">
+                                        {% if ch.platform == 'WHATSAPP' %}
+                                        <i class="fa-brands fa-whatsapp text-emerald-400 text-[10px]"></i>
+                                        {% elif ch.platform == 'TEAMS' %}
+                                        <i class="fa-brands fa-microsoft text-blue-400 text-[10px]"></i>
+                                        {% elif ch.platform == 'SLACK' %}
+                                        <i class="fa-brands fa-slack text-purple-400 text-[10px]"></i>
+                                        {% elif ch.platform == 'TELEGRAM' %}
+                                        <i class="fa-brands fa-telegram text-sky-400 text-[10px]"></i>
+                                        {% else %}
+                                        <i class="fa-solid fa-comment-dots text-sky-400 text-[10px]"></i>
+                                        {% endif %}
+                                        <span class="truncate">{{ ch.channel_name }}</span>
+                                    </a>
                                 {% empty %}
-                                    <span class="text-[11px] text-slate-400 italic">No participants</span>
+                                    <span class="text-[11px] text-slate-400 italic">No chat exports uploaded yet</span>
                                 {% endfor %}
                             </div>
                         </div>
@@ -162,16 +157,16 @@
 
                     <!-- Action Buttons -->
                     <div class="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-zinc-800">
-                        <form method="POST" action="{% url 'q_chat:delete_channel' ch.id %}" onsubmit="return confirm('Delete this chat channel and all associated messages?');" class="inline">
+                        <form method="POST" action="{% url 'q_chat:delete_custodian' c.custodian_name %}" onsubmit="return confirm('Are you sure you want to delete this custodian and all linked chat records?');" class="inline">
                             {% csrf_token %}
-                            <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 transition-colors cursor-pointer" title="Delete Channel">
+                            <button type="submit" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 transition-colors cursor-pointer" title="Delete Custodian Profile">
                                 <i class="fa-solid fa-trash-can text-xs"></i>
                             </button>
                         </form>
 
-                        <a href="{% url 'q_chat:channel_detail' ch.id %}" 
+                        <a href="{% url 'q_chat:custodian_detail' c.custodian_name %}" 
                            class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-md shadow-sky-600/20 transition-all cursor-pointer">
-                            <span>Open Thread</span>
+                            <span>Open Analysis</span>
                             <i class="fa-solid fa-arrow-right text-[11px]"></i>
                         </a>
                     </div>
@@ -181,9 +176,9 @@
 
             <!-- Empty Search State -->
             <div x-cloak x-show="searchQuery && !Array.from($el.parentElement.querySelectorAll('div[x-show*=\'matches\']')).some(el => el.style.display !== 'none')"
-                 class="p-10 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800">
+                 class="col-span-full py-10 text-center bg-slate-50 dark:bg-zinc-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-zinc-800">
                 <i class="fa-solid fa-magnifying-glass text-2xl text-slate-400 mb-2 block"></i>
-                <p class="text-xs font-semibold text-slate-700 dark:text-zinc-300">No chat channels matching "<span x-text="searchQuery"></span>"</p>
+                <p class="text-xs font-semibold text-slate-600 dark:text-zinc-300">No custodians found matching "<span x-text="searchQuery"></span>"</p>
                 <button type="button" @click="searchQuery = ''" class="mt-2 text-xs text-sky-500 hover:underline font-semibold cursor-pointer">
                     Clear search filter
                 </button>
@@ -191,10 +186,10 @@
         {% else %}
             <div class="p-12 text-center bg-white dark:bg-zinc-900 rounded-2xl border border-dashed border-slate-300 dark:border-zinc-800">
                 <div class="w-16 h-16 rounded-2xl bg-sky-500/10 text-sky-400 mx-auto flex items-center justify-center text-2xl mb-4">
-                    <i class="fa-solid fa-comments"></i>
+                    <i class="fa-solid fa-user-plus"></i>
                 </div>
-                <h4 class="text-base font-bold text-slate-900 dark:text-white mb-1">No Chat Channels Ingested</h4>
-                <p class="text-xs text-slate-400 max-w-md mx-auto mb-6">Upload a WhatsApp export (.txt), Microsoft Teams / Slack JSON/CSV, or Telegram export to reconstruct conversational threads.</p>
+                <h4 class="text-base font-bold text-slate-900 dark:text-white mb-1">No Custodian Profiles Yet</h4>
+                <p class="text-xs text-slate-400 max-w-md mx-auto mb-6">Upload a WhatsApp export (.txt), Microsoft Teams / Slack JSON/CSV, or Telegram export to initiate profile-based chat forensics.</p>
                 <button onclick="openUploadModal()" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-lg shadow-sky-600/20 cursor-pointer">
                     Import Chat File
                 </button>

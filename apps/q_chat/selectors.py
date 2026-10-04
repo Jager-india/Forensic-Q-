@@ -9,6 +9,8 @@ from typing import Any
 from django.core.paginator import Paginator
 from django.db.models import Count, Max, Min, Q, QuerySet
 
+from core.models import InvestigationProfile
+
 from .backend.chat_parser import is_whatsapp_system_message
 from .models import ChatChannel, ChatMessage
 
@@ -55,6 +57,117 @@ def get_all_chat_channels() -> QuerySet[ChatChannel]:
     return ChatChannel.objects.all().order_by("-last_message_at", "-created_at")
 
 
+def get_all_custodian_profiles() -> list[dict[str, Any]]:
+    """
+    Groups all chat channels by custodian name and returns aggregate
+    forensic metrics per custodian profile for the directory card grid.
+    """
+    channels = ChatChannel.objects.all().order_by("-last_message_at", "-created_at")
+    profiles_map = {
+        p.full_name.strip().lower(): p for p in InvestigationProfile.objects.all() if p.full_name
+    }
+
+    custodians_dict: dict[str, dict[str, Any]] = {}
+    for ch in channels:
+        raw_name = ch.custodian_name.strip() if ch.custodian_name else ""
+        c_name = raw_name if raw_name else "General Custodian"
+        if c_name not in custodians_dict:
+            inv_prof = profiles_map.get(c_name.lower())
+            custodians_dict[c_name] = {
+                "custodian_name": c_name,
+                "department": (
+                    inv_prof.department
+                    if inv_prof and inv_prof.department
+                    else (
+                        "Corporate Communications"
+                        if c_name != "General Custodian"
+                        else "General Auditee"
+                    )
+                ),
+                "employee_id": inv_prof.employee_id if inv_prof else "",
+                "designation": inv_prof.designation if inv_prof else "",
+                "channels": [],
+                "channels_count": 0,
+                "total_messages": 0,
+                "flagged_messages_count": 0,
+                "participants_set": set(),
+                "platforms": set(),
+            }
+        entry = custodians_dict[c_name]
+        entry["channels"].append(ch)
+        entry["total_messages"] += ch.total_messages
+        entry["flagged_messages_count"] += ch.flagged_messages_count
+        entry["platforms"].add(ch.get_platform_display())
+        for p in ch.participants or []:
+            if p and not is_whatsapp_system_message(p) and p.lower() not in ("system", "whatsapp"):
+                entry["participants_set"].add(p)
+
+    results = []
+    for entry in custodians_dict.values():
+        entry["channels_count"] = len(entry["channels"])
+        entry["participant_count"] = len(entry["participants_set"])
+        entry["platforms_list"] = sorted(entry["platforms"])
+        results.append(entry)
+
+    results.sort(
+        key=lambda x: (
+            0 if x["custodian_name"] != "General Custodian" else 1,
+            -x["total_messages"],
+            -x["channels_count"],
+        )
+    )
+    return results
+
+
+def get_custodian_profile_detail(custodian_name: str) -> dict[str, Any]:
+    """
+    Retrieves full custodian metadata, linked channels, and aggregate stats.
+    """
+    clean_name = custodian_name.strip()
+    is_general = clean_name.lower() in ("general custodian", "unassigned", "")
+
+    if is_general:
+        channels_qs = ChatChannel.objects.filter(
+            Q(custodian_name="")
+            | Q(custodian_name__iexact="General Custodian")
+            | Q(custodian_name__isnull=True)
+        )
+    else:
+        channels_qs = ChatChannel.objects.filter(custodian_name__iexact=clean_name)
+
+    channels = list(channels_qs.order_by("-last_message_at", "-created_at"))
+
+    inv_prof = (
+        InvestigationProfile.objects.filter(full_name__iexact=clean_name).first()
+        if not is_general
+        else None
+    )
+
+    total_msgs = sum(c.total_messages for c in channels)
+    flagged_msgs = sum(c.flagged_messages_count for c in channels)
+    participants_set = set()
+    for ch in channels:
+        for p in ch.participants or []:
+            if p and not is_whatsapp_system_message(p) and p.lower() not in ("system", "whatsapp"):
+                participants_set.add(p)
+
+    return {
+        "custodian_name": clean_name if not is_general else "General Custodian",
+        "department": (
+            inv_prof.department
+            if inv_prof and inv_prof.department
+            else ("Corporate Communications" if not is_general else "General Auditee")
+        ),
+        "employee_id": inv_prof.employee_id if inv_prof else "",
+        "designation": inv_prof.designation if inv_prof else "",
+        "channels": channels,
+        "channels_count": len(channels),
+        "total_messages": total_msgs,
+        "flagged_messages_count": flagged_msgs,
+        "participant_count": len(participants_set),
+    }
+
+
 def get_chat_channel_by_id(channel_id: str | uuid.UUID) -> ChatChannel | None:
     """
     Retrieves a single channel by primary key.
@@ -66,8 +179,9 @@ def get_chat_channel_by_id(channel_id: str | uuid.UUID) -> ChatChannel | None:
 
 
 def get_paginated_chat_messages(
-    channel_id: str | uuid.UUID,
+    channel_id: str | uuid.UUID | None = None,
     *,
+    custodian_name: str | None = None,
     page: int = 1,
     page_size: int = 50,
     search: str = "",
@@ -79,10 +193,25 @@ def get_paginated_chat_messages(
     right_sender: str = "",
 ) -> dict[str, Any]:
     """
-    Retrieves paginated messages for a specific channel with flexible filters.
+    Retrieves paginated messages for a specific channel or custodian profile with flexible filters.
     Consistently assigns left vs right side per participant, and isolates system disclaimers.
     """
-    qs = ChatMessage.objects.filter(channel_id=channel_id)
+    if channel_id:
+        qs = ChatMessage.objects.filter(channel_id=channel_id).select_related("channel")
+    elif custodian_name:
+        c_clean = custodian_name.strip()
+        if c_clean.lower() in ("general custodian", "unassigned", ""):
+            qs = ChatMessage.objects.filter(
+                Q(channel__custodian_name="")
+                | Q(channel__custodian_name__iexact="General Custodian")
+                | Q(channel__custodian_name__isnull=True)
+            ).select_related("channel")
+        else:
+            qs = ChatMessage.objects.filter(channel__custodian_name__iexact=c_clean).select_related(
+                "channel"
+            )
+    else:
+        qs = ChatMessage.objects.none()
 
     if search:
         s = search.strip()
@@ -106,20 +235,27 @@ def get_paginated_chat_messages(
     # Determine which participant should appear on the right side
     if not right_sender:
         try:
-            channel = ChatChannel.objects.get(id=channel_id)
-            # 1. Check if channel custodian matches a participant
-            if channel.custodian_name:
-                cust_clean = channel.custodian_name.strip().lower()
-                for p in channel.participants:
-                    if p.strip().lower() == cust_clean or cust_clean in p.strip().lower():
-                        right_sender = p
+            target_cust = custodian_name.strip() if custodian_name else ""
+            if not target_cust and channel_id:
+                ch_obj = ChatChannel.objects.filter(id=channel_id).first()
+                if ch_obj:
+                    target_cust = ch_obj.custodian_name.strip()
+
+            if target_cust and target_cust.lower() not in ("general custodian", "unassigned"):
+                cust_lower = target_cust.lower()
+                matching_senders = (
+                    qs.exclude(sender_name__in=["System", "system", "WhatsApp", "whatsapp"])
+                    .values_list("sender_name", flat=True)
+                    .distinct()
+                )
+                for s_name in matching_senders:
+                    if s_name.strip().lower() == cust_lower or cust_lower in s_name.strip().lower():
+                        right_sender = s_name
                         break
 
-            # 2. If no custodian match, pick 2nd participant in chronological appearance
             if not right_sender:
                 first_senders = list(
-                    ChatMessage.objects.filter(channel_id=channel_id)
-                    .exclude(sender_name__in=["System", "system", "WhatsApp", "whatsapp"])
+                    qs.exclude(sender_name__in=["System", "system", "WhatsApp", "whatsapp"])
                     .order_by("sent_at", "created_at")
                     .values_list("sender_name", flat=True)
                 )
@@ -133,9 +269,9 @@ def get_paginated_chat_messages(
                         ordered_participants.append(s_name)
 
                 if len(ordered_participants) >= 2:
-                    # In standard chat view: Person 1 is on the left (initiator/contact),
-                    # Person 2 is on the right (responder/account holder)
                     right_sender = ordered_participants[1]
+                elif len(ordered_participants) == 1:
+                    right_sender = ordered_participants[0]
         except Exception:
             right_sender = ""
 
@@ -159,6 +295,10 @@ def get_paginated_chat_messages(
         rows.append(
             {
                 "id": str(msg.id),
+                "channel_id": str(msg.channel_id),
+                "channel_name": msg.channel.channel_name,
+                "platform": msg.channel.platform,
+                "platform_display": msg.channel.get_platform_display(),
                 "sender_name": "System" if is_sys else msg.sender_name,
                 "sender_handle": msg.sender_handle,
                 "sent_at": msg.sent_at.strftime("%d %b %Y, %H:%M:%S") if msg.sent_at else "-",
@@ -195,14 +335,32 @@ def get_paginated_chat_messages(
     }
 
 
-def get_chat_participants_summary(channel_id: str | uuid.UUID) -> list[dict[str, Any]]:
+def get_chat_participants_summary(
+    channel_id: str | uuid.UUID | None = None,
+    *,
+    custodian_name: str | None = None,
+) -> list[dict[str, Any]]:
     """
-    Summarizes participants in a channel with message counts and flagged message counts.
+    Summarizes participants in a channel or custodian profile with message counts and flagged message counts.
     Excludes automated system and disclaimer messages.
     """
+    if channel_id:
+        base_qs = ChatMessage.objects.filter(channel_id=channel_id)
+    elif custodian_name:
+        c_clean = custodian_name.strip()
+        if c_clean.lower() in ("general custodian", "unassigned", ""):
+            base_qs = ChatMessage.objects.filter(
+                Q(channel__custodian_name="")
+                | Q(channel__custodian_name__iexact="General Custodian")
+                | Q(channel__custodian_name__isnull=True)
+            )
+        else:
+            base_qs = ChatMessage.objects.filter(channel__custodian_name__iexact=c_clean)
+    else:
+        return []
+
     raw_participants = (
-        ChatMessage.objects.filter(channel_id=channel_id)
-        .exclude(sender_name__in=["System", "system", "WhatsApp", "whatsapp"])
+        base_qs.exclude(sender_name__in=["System", "system", "WhatsApp", "whatsapp"])
         .values("sender_name")
         .annotate(
             total_msgs=Count("id"),

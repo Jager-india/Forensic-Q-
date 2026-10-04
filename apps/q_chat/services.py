@@ -7,6 +7,7 @@ import uuid
 from typing import BinaryIO, TextIO
 
 from django.db import transaction
+from django.db.models import Q
 from loguru import logger
 
 from .backend.chat_parser import ingest_chat_file
@@ -127,3 +128,24 @@ def delete_chat_channel(channel_id: str | uuid.UUID) -> bool:
         return True
     except (ChatChannel.DoesNotExist, ValueError):
         return False
+
+
+@transaction.atomic
+def delete_custodian_channels(custodian_name: str) -> int:
+    """
+    Deletes all chat channels and messages belonging to a custodian profile.
+    """
+    c_clean = custodian_name.strip()
+    if c_clean.lower() in ("general custodian", "unassigned", ""):
+        qs = ChatChannel.objects.filter(
+            Q(custodian_name="")
+            | Q(custodian_name__iexact="General Custodian")
+            | Q(custodian_name__isnull=True)
+        )
+    else:
+        qs = ChatChannel.objects.filter(custodian_name__iexact=c_clean)
+
+    count = qs.count()
+    qs.delete()
+    logger.info(f"Deleted {count} chat channels for custodian '{custodian_name}'")
+    return count
