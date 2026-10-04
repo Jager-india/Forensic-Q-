@@ -179,10 +179,12 @@ def match_default_keywords(text: str) -> list[str]:
     return [kw for kw in DEFAULT_KEYWORDS if kw in upper_text]
 
 
-def evaluate_email_checkpoints(email_obj: Any) -> dict[str, Any]:
+def evaluate_email_checkpoints(
+    email_obj: Any, profile_keywords: list[str] | None = None
+) -> dict[str, Any]:
     """
     Evaluates all forensic checkpoints for a given EmailMessage instance.
-    Returns boolean flags and matched badges.
+    Returns boolean flags and matched badges, including profile surveillance keywords.
     """
     combined_text = f"{email_obj.subject or ''} {email_obj.body_plain or ''}"
     sender = email_obj.sender_email or ""
@@ -197,6 +199,14 @@ def evaluate_email_checkpoints(email_obj: Any) -> dict[str, Any]:
     is_bank = check_primary_bank(sender, email_obj.subject or "", email_obj.body_plain or "")
     is_upi = check_upi_payment(sender, email_obj.subject or "", email_obj.body_plain or "")
     matched_default_kws = match_default_keywords(combined_text)
+
+    matched_profile_kws = []
+    if profile_keywords:
+        upper_text = combined_text.upper()
+        for kw in profile_keywords:
+            clean_kw = kw.strip().upper()
+            if clean_kw and clean_kw in upper_text and clean_kw not in matched_profile_kws:
+                matched_profile_kws.append(clean_kw)
 
     badges = []
     if is_currency:
@@ -225,6 +235,10 @@ def evaluate_email_checkpoints(email_obj: Any) -> dict[str, Any]:
         )
     for kw in matched_default_kws:
         badges.append({"label": kw, "variant": "rose", "icon": "fa-solid fa-tag"})
+    for kw in matched_profile_kws:
+        badges.append(
+            {"label": f"Profile: {kw}", "variant": "rose", "icon": "fa-solid fa-bullseye"}
+        )
 
     return {
         "is_currency": is_currency,
@@ -234,5 +248,6 @@ def evaluate_email_checkpoints(email_obj: Any) -> dict[str, Any]:
         "is_primary_bank": is_bank,
         "is_upi_payment": is_upi,
         "matched_default_keywords": matched_default_kws,
+        "matched_profile_keywords": matched_profile_kws,
         "badges": badges,
     }

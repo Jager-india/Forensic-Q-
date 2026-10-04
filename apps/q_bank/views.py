@@ -115,11 +115,18 @@ def person_detail_view(request: HttpRequest, person_id: str) -> HttpResponse:
             if last_txn:
                 closing_balance += last_txn.closing_balance
 
+    from core.profiles import get_profile_keywords
+
+    profile_keywords = get_profile_keywords(custodian_name=person.full_name, request=request)
+    profile_keywords_str = ", ".join(profile_keywords) if profile_keywords else ""
+
     context = {
         "person": person,
         "accounts": accounts,
         "selected_account": selected_account,
         "selected_account_id": str(selected_account.id) if selected_account else "",
+        "profile_keywords": profile_keywords,
+        "profile_keywords_str": profile_keywords_str,
         "view_metrics": {
             "total_transactions": view_txns,
             "total_debit": view_debit,
@@ -243,7 +250,26 @@ def fuzzy_search_api_view(request: HttpRequest) -> JsonResponse:
     """
     account_id = request.GET.get("account_id", "").strip() or None
     person_id = request.GET.get("person_id", "").strip() or None
-    keywords = request.GET.get("keywords", "trust, sarla").strip()
+    keywords = request.GET.get("keywords", "").strip()
+    if not keywords:
+        from core.profiles import get_profile_keywords
+
+        custodian_name = None
+        if person_id:
+            person = get_audited_person_by_id(person_id)
+            if person:
+                custodian_name = person.full_name
+        elif account_id:
+            account = get_bank_account_by_id(account_id)
+            if account and account.person:
+                custodian_name = account.person.full_name
+
+        p_kws = get_profile_keywords(custodian_name=custodian_name, request=request)
+        if p_kws:
+            keywords = ", ".join(p_kws)
+        else:
+            keywords = "trust, sarla"
+
     try:
         threshold = int(request.GET.get("threshold", 80))
     except (ValueError, TypeError):

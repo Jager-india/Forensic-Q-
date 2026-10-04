@@ -189,6 +189,7 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
         "pairwise_matrix": formatted_matrix,
         "pairwise_summaries": pairwise_summaries,
         "saved_cases": saved_cases,
+        "trail_keywords": analysis.get("trail_keywords", []),
     }
 
     return render(request, "q_trail/dashboard.html", context)

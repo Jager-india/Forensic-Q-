@@ -126,7 +126,10 @@ def analyze_profiles_money_trail(
             "unique_intermediaries_count": 0,
             "unique_intermediaries_list": [],
             "circular_paths_count": 0,
+            "trail_keywords_count": 0,
+            "keyword_hits_count": 0,
         },
+        "trail_keywords": [],
         "analyzed_profiles": [],
     }
 
@@ -217,7 +220,58 @@ def analyze_profiles_money_trail(
     else:
         combined_intermediate = pd.DataFrame()
 
-    # 4. Group intermediate transfers by candidate intermediary entity
+    # 4. Resolve Profile Surveillance Keywords & Annotate Transfers
+    from core.profiles import get_profile_keywords
+
+    trail_keywords_set: set[str] = set()
+    for pid in unique_profile_ids:
+        trail_keywords_set.update(get_profile_keywords(profile_id=pid))
+    for pmeta in profile_metadata:
+        trail_keywords_set.update(get_profile_keywords(custodian_name=pmeta["name"]))
+    trail_keywords = sorted(trail_keywords_set)
+
+    keyword_hits_count = 0
+    if not combined_direct.empty:
+        if trail_keywords:
+
+            def _match_direct_kw(row):
+                matched = []
+                text = f"{row.get('Narration_Out', '')} {row.get('Narration_In', '')}".upper()
+                for kw in trail_keywords:
+                    clean_kw = kw.strip().upper()
+                    if clean_kw and clean_kw in text and clean_kw not in matched:
+                        matched.append(clean_kw)
+                return ", ".join(matched)
+
+            combined_direct["Matched_Keywords"] = combined_direct.apply(_match_direct_kw, axis=1)
+            combined_direct["Keyword_Hit"] = combined_direct["Matched_Keywords"] != ""
+            keyword_hits_count += int(combined_direct["Keyword_Hit"].sum())
+        else:
+            combined_direct["Matched_Keywords"] = ""
+            combined_direct["Keyword_Hit"] = False
+
+    if not combined_intermediate.empty:
+        if trail_keywords:
+
+            def _match_inter_kw(row):
+                matched = []
+                text = f"{row.get('Intermediary_Entity', '')} {row.get('Outflow_Narration', '')} {row.get('Inflow_Narration', '')}".upper()
+                for kw in trail_keywords:
+                    clean_kw = kw.strip().upper()
+                    if clean_kw and clean_kw in text and clean_kw not in matched:
+                        matched.append(clean_kw)
+                return ", ".join(matched)
+
+            combined_intermediate["Matched_Keywords"] = combined_intermediate.apply(
+                _match_inter_kw, axis=1
+            )
+            combined_intermediate["Keyword_Hit"] = combined_intermediate["Matched_Keywords"] != ""
+            keyword_hits_count += int(combined_intermediate["Keyword_Hit"].sum())
+        else:
+            combined_intermediate["Matched_Keywords"] = ""
+            combined_intermediate["Keyword_Hit"] = False
+
+    # 5. Group intermediate transfers by candidate intermediary entity
     grouped_intermediaries = group_intermediate_transfers_by_intermediary(combined_intermediate)
 
     # 5. Detect Circular Round-Tripping Loops & Multi-Hop Network Chains
@@ -409,6 +463,8 @@ def analyze_profiles_money_trail(
         "unique_intermediaries_count": len(grouped_intermediaries),
         "unique_intermediaries_list": sorted(grouped_intermediaries.keys()),
         "circular_paths_count": len(circular_trails),
+        "trail_keywords_count": len(trail_keywords),
+        "keyword_hits_count": keyword_hits_count,
     }
 
     # 7. Optional Atomic Persistence
@@ -497,5 +553,6 @@ def analyze_profiles_money_trail(
         "pairwise_matrix": pairwise_matrix,
         "pairwise_summaries": pairwise_summaries,
         "metrics": metrics,
+        "trail_keywords": trail_keywords,
         "analyzed_profiles": profile_metadata,
     }

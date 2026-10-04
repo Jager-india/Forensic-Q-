@@ -151,6 +151,21 @@
                 </span>
             </div>
 
+            {% if profile_keywords %}
+            <!-- Profile Surveillance Registry Chips -->
+            <div class="flex flex-wrap items-center gap-2 p-3 bg-purple-500/5 dark:bg-purple-900/10 border border-purple-500/20 rounded-2xl">
+                <span class="text-xs font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-bullseye text-xs"></i> Profile Surveillance Registry ({{ profile_keywords|length }}):
+                </span>
+                {% for kw in profile_keywords %}
+                <a href="?q={{ kw|urlencode }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}" 
+                   class="px-2.5 py-1 text-[11px] font-mono font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition">
+                    {{ kw }}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
             <!-- Chat Bubble Message Stream Container -->
             <div class="bg-slate-50 dark:bg-zinc-950/60 rounded-2xl border border-slate-200 dark:border-zinc-800 p-6 min-h-[500px] max-h-[700px] overflow-y-auto space-y-4 shadow-inner">
                 {% if messages_data.data %}

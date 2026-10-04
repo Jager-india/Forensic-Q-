@@ -149,10 +149,12 @@ SUSPICIOUS_KEYWORDS = {
 }
 
 
-def tag_transcript_detections(text: str) -> list[dict[str, str]]:
+def tag_transcript_detections(
+    text: str, extra_keywords: list[str] | None = None
+) -> list[dict[str, str]]:
     """
     Tags hotwords and entities in a transcript line with appropriate classification types.
-    Types: 'identity' (p-tag), 'financial' (f-tag), 'suspicious' (s-tag).
+    Types: 'identity' (p-tag), 'financial' (f-tag), 'suspicious' (s-tag), 'profile' (surveillance).
     """
     if not text:
         return []
@@ -175,6 +177,20 @@ def tag_transcript_detections(text: str) -> list[dict[str, str]]:
         if re.search(r"\b" + re.escape(kw) + r"\b", text_lower) and kw not in seen:
             seen.add(kw)
             detections.append({"term": kw.upper(), "type": "identity", "category": "Identity"})
+
+    if extra_keywords:
+        for kw in extra_keywords:
+            kw_clean = kw.strip().lower()
+            if kw_clean and kw_clean not in seen:
+                if re.search(r"\b" + re.escape(kw_clean) + r"\b", text_lower):
+                    seen.add(kw_clean)
+                    detections.append(
+                        {
+                            "term": kw.upper(),
+                            "type": "profile",
+                            "category": "Profile Surveillance",
+                        }
+                    )
 
     return detections
 
@@ -201,7 +217,9 @@ def extract_speaker_and_text(raw_text: str, default_speaker: str = "") -> tuple[
     return default_speaker, raw_text.strip()
 
 
-def screen_text_for_intent(text: str) -> tuple[str, list[str], int]:
+def screen_text_for_intent(
+    text: str, extra_keywords: list[str] | None = None
+) -> tuple[str, list[str], int]:
     """
     Screens an utterance against intent patterns and returns (intent, flagged_keywords, risk_score).
     """
@@ -221,10 +239,22 @@ def screen_text_for_intent(text: str) -> tuple[str, list[str], int]:
                     max_risk = weight
                     highest_intent = intent
 
+    if extra_keywords:
+        for kw in extra_keywords:
+            kw_clean = kw.strip().lower()
+            if kw_clean and re.search(r"\b" + re.escape(kw_clean) + r"\b", text_lower):
+                flagged.append(kw.upper())
+                if max_risk < 35:
+                    max_risk = 35
+                if highest_intent == "General":
+                    highest_intent = "Profile Surveillance Hit"
+
     return highest_intent, list(set(flagged)), max_risk
 
 
-def parse_transcript_text_to_timeline(raw_content: str) -> list[dict[str, Any]]:
+def parse_transcript_text_to_timeline(
+    raw_content: str, extra_keywords: list[str] | None = None
+) -> list[dict[str, Any]]:
     """
     Converts raw text/VTT/SRT transcript into standardized timeline chunks with speaker separation.
     """
@@ -257,8 +287,10 @@ def parse_transcript_text_to_timeline(raw_content: str) -> list[dict[str, Any]]:
         if pending_interval:
             default_spk = f"Speaker {(speaker_turn_idx % 2) + 1}"
             speaker, clean_text = extract_speaker_and_text(line_clean, default_spk)
-            dets = tag_transcript_detections(clean_text)
-            intent, flagged_kw, risk = screen_text_for_intent(clean_text)
+            dets = tag_transcript_detections(clean_text, extra_keywords=extra_keywords)
+            intent, flagged_kw, risk = screen_text_for_intent(
+                clean_text, extra_keywords=extra_keywords
+            )
             timeline.append(
                 {
                     "timestamp": pending_interval,
@@ -291,8 +323,10 @@ def parse_transcript_text_to_timeline(raw_content: str) -> list[dict[str, Any]]:
             ts_label = f"[{s_fmt} --> {e_fmt}]"
             default_spk = f"Speaker {(speaker_turn_idx % 2) + 1}"
             speaker, clean_text = extract_speaker_and_text(text_part, default_spk)
-            dets = tag_transcript_detections(clean_text)
-            intent, flagged_kw, risk = screen_text_for_intent(clean_text)
+            dets = tag_transcript_detections(clean_text, extra_keywords=extra_keywords)
+            intent, flagged_kw, risk = screen_text_for_intent(
+                clean_text, extra_keywords=extra_keywords
+            )
             timeline.append(
                 {
                     "timestamp": ts_label,
@@ -309,7 +343,9 @@ def parse_transcript_text_to_timeline(raw_content: str) -> list[dict[str, Any]]:
     return timeline
 
 
-def ingest_transcript_content(content: str, filename: str) -> list[dict[str, Any]]:
+def ingest_transcript_content(
+    content: str, filename: str, extra_keywords: list[str] | None = None
+) -> list[dict[str, Any]]:
     """
     Ingests raw file text and produces structured diarization segment dictionaries.
     """
@@ -322,6 +358,6 @@ def ingest_transcript_content(content: str, filename: str) -> list[dict[str, Any
             if isinstance(data, dict) and "timeline_transcript" in data:
                 return data["timeline_transcript"]
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-            return parse_transcript_text_to_timeline(content)
+            return parse_transcript_text_to_timeline(content, extra_keywords=extra_keywords)
 
-    return parse_transcript_text_to_timeline(content)
+    return parse_transcript_text_to_timeline(content, extra_keywords=extra_keywords)

@@ -3,6 +3,7 @@ import json
 import logging
 import tempfile
 import uuid
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -770,3 +771,140 @@ class CoreProfileViewsTests(TestCase):
 
         created = sync_all_existing_entities_to_profiles()
         self.assertGreaterEqual(created, 3)
+
+
+class ProfileKeywordRegistryIntegrationTests(TestCase):
+    """
+    Validates end-to-end profile surveillance keyword registry consumption across
+    all forensic Q-apps (q_bank, q_mail, q_voice, q_chat, q_trail, q_scan).
+    """
+
+    def setUp(self):
+        self.profile = InvestigationProfile.objects.create(
+            full_name="Vikram Sethi",
+            department="Procurement",
+            keywords=["PROJECT_TITAN_SECRET", "SWISS_ACCOUNT", "COMMISSION_CUT", "SHELL_CORP"],
+        )
+        self.factory = RequestFactory()
+
+    def test_get_profile_keywords_resolver(self):
+        from core.profiles import get_profile_keywords
+
+        # 1. By Profile ID
+        kws = get_profile_keywords(profile_id=self.profile.id)
+        self.assertEqual(
+            kws, ["PROJECT_TITAN_SECRET", "SWISS_ACCOUNT", "COMMISSION_CUT", "SHELL_CORP"]
+        )
+
+        # 2. By Custodian Name with (Auditee) suffix
+        kws_auditee = get_profile_keywords(custodian_name="Vikram Sethi (Auditee)")
+        self.assertEqual(
+            kws_auditee, ["PROJECT_TITAN_SECRET", "SWISS_ACCOUNT", "COMMISSION_CUT", "SHELL_CORP"]
+        )
+
+        # 3. By Request Session Active Profile
+        req = self.factory.get("/")
+        req.session = {"active_profile_id": str(self.profile.id)}
+        kws_session = get_profile_keywords(request=req)
+        self.assertEqual(
+            kws_session, ["PROJECT_TITAN_SECRET", "SWISS_ACCOUNT", "COMMISSION_CUT", "SHELL_CORP"]
+        )
+
+    def test_q_bank_fuzzy_search_profile_keywords(self):
+        from q_bank.models import AuditedPerson, BankAccount, BankTransaction
+
+        person = AuditedPerson.objects.create(full_name="Vikram Sethi")
+        account = BankAccount.objects.create(
+            person=person,
+            account_number="9988776655",
+            bank_name="HDFC Bank",
+        )
+        BankTransaction.objects.create(
+            account=account,
+            txn_date="2026-03-01T10:00:00Z",
+            narration="IMPS PAYMENT FOR PROJECT_TITAN_SECRET ROUTING",
+            direction=BankTransaction.Direction.DEBIT,
+            debit_amount=Decimal("50000.00"),
+        )
+
+        client = Client()
+        session = client.session
+        session["portal_authenticated"] = True
+        session["active_profile_id"] = str(self.profile.id)
+        session.save()
+
+        # Call fuzzy search without keywords param; should resolve from profile
+        res = client.get(f"/bank/api/fuzzy-search/?person_id={person.id}&threshold=70")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertGreaterEqual(data["total_matches"], 1)
+
+    def test_q_mail_checkpoint_evaluation_profile_keywords(self):
+        from q_mail.backend.checkpoints import evaluate_email_checkpoints
+
+        class MockEmail:
+            subject = "Confidential: Payment and PROJECT_TITAN_SECRET confirmation"
+            body_plain = "Please ensure the shell_corp documentation is attached."
+            sender_email = "vikram@external.com"
+            recipients_to = ["auditor@hmil.net"]
+            recipients_cc = []
+            recipients_bcc = []
+
+        res = evaluate_email_checkpoints(MockEmail(), profile_keywords=self.profile.keywords)
+        self.assertIn("PROJECT_TITAN_SECRET", res["matched_profile_keywords"])
+        self.assertIn("SHELL_CORP", res["matched_profile_keywords"])
+        badges = [b["label"] for b in res["badges"]]
+        self.assertIn("Profile: PROJECT_TITAN_SECRET", badges)
+        self.assertIn("Profile: SHELL_CORP", badges)
+
+    def test_q_voice_tagging_and_screening_profile_keywords(self):
+        from q_voice.backend.voice_parser import (
+            screen_text_for_intent,
+            tag_transcript_detections,
+        )
+
+        text = "He mentioned using project_titan_secret to dispatch the parcel."
+        dets = tag_transcript_detections(text, extra_keywords=self.profile.keywords)
+        types = [d["type"] for d in dets]
+        self.assertIn("profile", types)
+        terms = [d["term"] for d in dets]
+        self.assertIn("PROJECT_TITAN_SECRET", terms)
+
+        intent, flagged, risk = screen_text_for_intent(text, extra_keywords=self.profile.keywords)
+        self.assertIn("PROJECT_TITAN_SECRET", flagged)
+        self.assertGreaterEqual(risk, 35)
+
+    def test_q_chat_screening_profile_keywords(self):
+        from q_chat.backend.chat_parser import screen_message_text
+
+        text = "Meet me near the hotel, bring the project_titan_secret voucher slip."
+        risk, flagged = screen_message_text(text, extra_keywords=self.profile.keywords)
+        self.assertIn("PROJECT_TITAN_SECRET", flagged)
+        self.assertGreaterEqual(risk, 25)
+
+    def test_q_trail_keyword_matching(self):
+        from q_trail.services import analyze_profiles_money_trail
+
+        profile2 = InvestigationProfile.objects.create(
+            full_name="Rajesh Sharma",
+            department="Vendor Management",
+            keywords=["OFFSHORE_ACC"],
+        )
+
+        res = analyze_profiles_money_trail(profile_ids=[str(self.profile.id), str(profile2.id)])
+        self.assertIn("trail_keywords", res)
+        self.assertIn("PROJECT_TITAN_SECRET", res["trail_keywords"])
+        self.assertIn("OFFSHORE_ACC", res["trail_keywords"])
+
+    def test_q_scan_config_profile_keywords_injection(self):
+        client = Client()
+        session = client.session
+        session["portal_authenticated"] = True
+        session["active_profile_id"] = str(self.profile.id)
+        session.save()
+
+        res = client.get("/scan/download/config.json/")
+        self.assertEqual(res.status_code, 200)
+        cfg_data = json.loads(res.content.decode("utf-8"))
+        self.assertIn("PROJECT_TITAN_SECRET", cfg_data["keywords"])
+        self.assertIn("SWISS_ACCOUNT", cfg_data["keywords"])

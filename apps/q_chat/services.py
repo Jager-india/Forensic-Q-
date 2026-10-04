@@ -38,7 +38,10 @@ def ingest_chat_export_file(
     else:
         raise ValueError("Unsupported file object type provided for chat ingestion.")
 
-    parsed_messages = ingest_chat_file(content, filename)
+    from core.profiles import get_profile_keywords
+
+    profile_keywords = get_profile_keywords(custodian_name=custodian_name)
+    parsed_messages = ingest_chat_file(content, filename, extra_keywords=profile_keywords)
     if not parsed_messages:
         raise ValueError("No valid chat messages could be extracted from the uploaded file.")
 

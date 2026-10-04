@@ -64,6 +64,25 @@
             </div>
         </div>
 
+        {% if active_profile_keywords %}
+        <!-- Active Profile Surveillance Keywords Indicator -->
+        <div class="mb-4 p-3 bg-purple-500/5 dark:bg-purple-900/10 border border-purple-500/20 rounded-xl flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-bullseye text-xs"></i> Active Profile Surveillance Keywords ({{ active_profile_keywords|length }}):
+                </span>
+                {% for kw in active_profile_keywords %}
+                <span class="px-2 py-0.5 text-[11px] font-mono font-semibold rounded-md bg-white dark:bg-zinc-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shadow-xs">
+                    {{ kw }}
+                </span>
+                {% endfor %}
+            </div>
+            <span class="text-[11px] font-medium text-slate-400 italic">
+                Auto-merged into downloaded scanner configuration
+            </span>
+        </div>
+        {% endif %}
+
         {% if custodian_profiles %}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {% for p in custodian_profiles %}

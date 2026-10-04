@@ -107,12 +107,19 @@ def custodian_detail_view(request: HttpRequest, custodian_name: str) -> HttpResp
         view_channel_title = "All Chats Combined"
         view_platform = f"{len(channels)} Channels"
 
+    from core.profiles import get_profile_keywords
+
+    profile_keywords = get_profile_keywords(custodian_name=custodian_name, request=request)
+    profile_keywords_str = ", ".join(profile_keywords) if profile_keywords else ""
+
     context = {
         "custodian": custodian_info,
         "custodian_name": custodian_name,
         "channels": channels,
         "selected_channel": selected_channel,
         "selected_channel_id": str(selected_channel.id) if selected_channel else "",
+        "profile_keywords": profile_keywords,
+        "profile_keywords_str": profile_keywords_str,
         "view_metrics": {
             "total_messages": view_total_messages,
             "flagged_messages": view_flagged_messages,

@@ -238,6 +238,36 @@ def set_active_profile(
     return None
 
 
+def get_profile_keywords(
+    *,
+    profile_id: str | uuid.UUID | None = None,
+    custodian_name: str | None = None,
+    request: HttpRequest | None = None,
+) -> list[str]:
+    """
+    Resolves registered surveillance keywords for a profile, custodian name,
+    or the current active investigator session.
+    Returns a normalized, deduplicated list of keyword strings.
+    """
+    profile: InvestigationProfile | None = None
+
+    if profile_id:
+        profile = get_profile_by_id(profile_id)
+
+    if not profile and custodian_name:
+        clean = custodian_name.replace("(Auditee)", "").strip()
+        if clean:
+            profile = InvestigationProfile.objects.filter(full_name__iexact=clean).first()
+
+    if not profile and request:
+        profile = get_active_profile(request)
+
+    if profile and profile.keywords:
+        return _normalize_keywords(profile.keywords)
+
+    return []
+
+
 def create_investigation_profile(
     *,
     full_name: str,

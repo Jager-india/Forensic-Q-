@@ -254,9 +254,21 @@ def ingest_audio_recording(
                     seg_detections = d.get("detections", [])
                     break
 
+            from core.profiles import get_profile_keywords
+
+            profile_keywords = get_profile_keywords(custodian_name=custodian_name.strip())
+
             if not seg_detections:
                 # Run internal hotword tagger if API detections were empty
-                seg_detections = tag_transcript_detections(clean_text)
+                seg_detections = tag_transcript_detections(
+                    clean_text, extra_keywords=profile_keywords
+                )
+            elif profile_keywords:
+                # Append profile surveillance detections
+                p_dets = tag_transcript_detections(clean_text, extra_keywords=profile_keywords)
+                for pd in p_dets:
+                    if pd.get("type") == "profile" and pd not in seg_detections:
+                        seg_detections.append(pd)
 
             # Classify detections counts
             for det in seg_detections:
@@ -268,7 +280,9 @@ def ingest_audio_recording(
                 else:
                     suspicious_cnt += 1
 
-            intent, flagged_kw, risk = screen_text_for_intent(clean_text)
+            intent, flagged_kw, risk = screen_text_for_intent(
+                clean_text, extra_keywords=profile_keywords
+            )
             if risk > max_risk:
                 max_risk = risk
 

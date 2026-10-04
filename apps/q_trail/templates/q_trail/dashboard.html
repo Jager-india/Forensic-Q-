@@ -183,6 +183,31 @@
         :loop_count="circular_trails|length"
     />
 
+    <!-- Watched Profile Surveillance Keywords Bar -->
+    {% if trail_keywords %}
+    <div class="mb-6 p-3.5 bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-transparent border border-purple-500/20 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-bullseye text-xs"></i> Watched Profile Surveillance Keywords ({{ trail_keywords|length }}):
+            </span>
+            {% for kw in trail_keywords %}
+            <span class="px-2 py-0.5 text-[11px] font-mono font-semibold rounded-md bg-white dark:bg-zinc-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shadow-xs">
+                {{ kw }}
+            </span>
+            {% endfor %}
+        </div>
+        {% if metrics.keyword_hits_count %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-500 border border-rose-500/20">
+            <i class="fa-solid fa-triangle-exclamation text-xs"></i> {{ metrics.keyword_hits_count }} Surveillance Hits in Money Trail
+        </span>
+        {% else %}
+        <span class="text-xs font-medium text-slate-400 dark:text-zinc-500 italic">
+            Scanning transaction narrations & intermediary names
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- 2. Interactive Multi-Hop Fund Flow Topology Canvas -->
     <c-trail.net_graph />
 

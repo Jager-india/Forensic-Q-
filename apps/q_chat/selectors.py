@@ -275,6 +275,19 @@ def get_paginated_chat_messages(
         except Exception:
             right_sender = ""
 
+    from core.profiles import get_profile_keywords
+
+    active_profile_kws: list[str] = []
+    if custodian_name:
+        active_profile_kws = get_profile_keywords(custodian_name=custodian_name)
+    elif channel_id:
+        try:
+            ch_obj = ChatChannel.objects.filter(id=channel_id).first()
+            if ch_obj and ch_obj.custodian_name:
+                active_profile_kws = get_profile_keywords(custodian_name=ch_obj.custodian_name)
+        except (ValueError, TypeError, ChatChannel.DoesNotExist):
+            active_profile_kws = []
+
     paginator = Paginator(qs, page_size)
     page_obj = paginator.get_page(page)
 
@@ -291,6 +304,16 @@ def get_paginated_chat_messages(
             and bool(right_sender)
             and (msg.sender_name.strip().lower() == right_sender.strip().lower())
         )
+
+        flagged = [] if is_sys else list(msg.flagged_terms or [])
+        score = 0 if is_sys else msg.risk_score
+        if not is_sys and active_profile_kws:
+            msg_lower = msg.message_text.lower()
+            for pkw in active_profile_kws:
+                pkw_clean = pkw.strip().lower()
+                if pkw_clean and pkw_clean in msg_lower and pkw not in flagged:
+                    flagged.append(pkw)
+                    score = max(score, 50)
 
         rows.append(
             {
@@ -310,8 +333,8 @@ def get_paginated_chat_messages(
                 "media_filename": msg.media_filename,
                 "is_deleted": msg.is_deleted,
                 "is_edited": msg.is_edited,
-                "risk_score": 0 if is_sys else msg.risk_score,
-                "flagged_terms": [] if is_sys else msg.flagged_terms,
+                "risk_score": score,
+                "flagged_terms": flagged,
                 "is_system": is_sys,
                 "is_right_side": is_right,
             }

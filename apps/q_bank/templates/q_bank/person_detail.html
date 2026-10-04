@@ -619,9 +619,16 @@
                 <div
                     class="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-slate-200 dark:border-zinc-700 space-y-4">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                            Enter keywords (comma separated)
-                        </label>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                                Enter keywords (comma separated)
+                            </label>
+                            {% if profile_keywords %}
+                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                <i class="fa-solid fa-bullseye text-[10px]"></i> Profile Surveillance Registry ({{ profile_keywords|length }} active)
+                            </span>
+                            {% endif %}
+                        </div>
                         <input type="text" x-model="fuzzyKeywords" placeholder="e.g. trust, sarla, sharma, auto"
                             class="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white font-mono focus:outline-none focus:border-rose-500">
                     </div>
@@ -886,7 +893,7 @@
                 },
 
                 // Fuzzy Search State
-                fuzzyKeywords: 'trust, sarla',
+                fuzzyKeywords: '{{ profile_keywords_str|default:"trust, sarla"|escapejs }}',
                 fuzzyThreshold: 80,
                 fuzzyResults: [],
                 fuzzyLoading: false,

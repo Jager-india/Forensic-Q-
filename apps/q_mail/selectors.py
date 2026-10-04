@@ -85,6 +85,14 @@ def get_mailbox_checkpoints_summary(mailbox_id: str | uuid.UUID) -> dict[str, An
         "body_plain",
     )
 
+    inv = MailboxInvestigation.objects.filter(id=mailbox_id).first()
+    profile_kws: list[str] = []
+    if inv:
+        from core.profiles import get_profile_keywords
+
+        profile_kws = get_profile_keywords(custodian_name=inv.auditee_name)
+    profile_keyword_counts = {kw.upper(): 0 for kw in profile_kws}
+
     currency_count = 0
     no_cc_bcc_count = 0
     personal_sender_count = 0
@@ -109,6 +117,7 @@ def get_mailbox_checkpoints_summary(mailbox_id: str | uuid.UUID) -> dict[str, An
         has_upi = check_upi_payment(sender, msg.subject or "", msg.body_plain or "")
 
         matched_kws = [kw for kw in DEFAULT_KEYWORDS if kw in text.upper()]
+        matched_profile_kws = [kw for kw in profile_keyword_counts if kw in text.upper()]
 
         if has_curr:
             currency_count += 1
@@ -124,8 +133,10 @@ def get_mailbox_checkpoints_summary(mailbox_id: str | uuid.UUID) -> dict[str, An
             upi_payment_count += 1
         for kw in matched_kws:
             keyword_counts[kw] += 1
+        for kw in matched_profile_kws:
+            profile_keyword_counts[kw] += 1
 
-        if any([has_curr, has_pers, has_bank, has_upi, matched_kws]):
+        if any([has_curr, has_pers, has_bank, has_upi, matched_kws, matched_profile_kws]):
             total_flagged += 1
 
     return {
@@ -139,6 +150,8 @@ def get_mailbox_checkpoints_summary(mailbox_id: str | uuid.UUID) -> dict[str, An
         "upi_payment_count": upi_payment_count,
         "default_keywords": keyword_counts,
         "total_keyword_hits": sum(keyword_counts.values()),
+        "profile_keywords": profile_keyword_counts,
+        "total_profile_keyword_hits": sum(profile_keyword_counts.values()),
     }
 
 
@@ -265,6 +278,15 @@ def get_paginated_investigation_emails(
     order_prefix = "-" if sort_dir.lower() == "desc" else ""
     qs = qs.order_by(f"{order_prefix}{db_sort_field}", "-created_at")
 
+    # Resolve auditee profile surveillance keywords
+    inv = MailboxInvestigation.objects.filter(id=mailbox_id).first()
+    profile_kws: list[str] = []
+    if inv:
+        from core.profiles import get_profile_keywords
+
+        profile_kws = get_profile_keywords(custodian_name=inv.auditee_name)
+    upper_profile_kws = [k.upper() for k in profile_kws]
+
     # In-memory filter for complex regex / domain-based checkpoints if selected
     checkpoint_filter = checkpoint.lower().strip()
     all_matching_records = list(qs)
@@ -272,7 +294,7 @@ def get_paginated_investigation_emails(
     if checkpoint_filter and checkpoint_filter != "all":
         filtered_list = []
         for m in all_matching_records:
-            eval_res = evaluate_email_checkpoints(m)
+            eval_res = evaluate_email_checkpoints(m, profile_keywords=profile_kws)
             matched = False
             if checkpoint_filter == "currency":
                 matched = eval_res["is_currency"]
@@ -290,6 +312,12 @@ def get_paginated_investigation_emails(
                 matched = bool(eval_res["matched_default_keywords"])
             elif checkpoint_filter.upper() in DEFAULT_KEYWORDS:
                 matched = checkpoint_filter.upper() in eval_res["matched_default_keywords"]
+            elif checkpoint_filter in ("profile_keywords", "profile_kw"):
+                matched = bool(eval_res["matched_profile_keywords"])
+            elif checkpoint_filter.upper() in upper_profile_kws:
+                matched = checkpoint_filter.upper() in [
+                    k.upper() for k in eval_res["matched_profile_keywords"]
+                ]
 
             if matched:
                 filtered_list.append(m)
@@ -300,7 +328,7 @@ def get_paginated_investigation_emails(
 
     rows = []
     for m in page_obj.object_list:
-        eval_res = evaluate_email_checkpoints(m)
+        eval_res = evaluate_email_checkpoints(m, profile_keywords=profile_kws)
         rows.append(
             {
                 "id": str(m.id),

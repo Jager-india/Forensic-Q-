@@ -33,12 +33,16 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
     Main Q-Scan forensic dashboard displaying audited endpoints, keyword metrics,
     and high-performance remote-paginated evidence grid.
     """
+    from core.profiles import get_profile_keywords
+
     metrics = get_scan_dashboard_metrics()
     custodian_profiles = get_all_custodian_profiles()
+    active_profile_keywords = get_profile_keywords(request=request)
 
     context = {
         "metrics": metrics,
         "custodian_profiles": custodian_profiles,
+        "active_profile_keywords": active_profile_keywords,
     }
     return render(request, "q_scan/dashboard.html", context)
 
@@ -254,6 +258,33 @@ def download_tool_file_view(request: HttpRequest, filename: str) -> HttpResponse
     target_path = allowed_files.get(filename)
     if not target_path or not target_path.exists():
         raise Http404("Requested tool file not found")
+
+    if filename == "config.json":
+        import json
+
+        from core.profiles import get_profile_keywords
+
+        base_cfg = {}
+        try:
+            base_cfg = json.loads(target_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            base_cfg = {}
+
+        profile_kws = get_profile_keywords(request=request)
+        if profile_kws:
+            existing_kws = base_cfg.get("keywords", [])
+            seen_kws = {k.lower() for k in existing_kws}
+            merged = list(existing_kws)
+            for pkw in profile_kws:
+                if pkw.lower() not in seen_kws:
+                    seen_kws.add(pkw.lower())
+                    merged.append(pkw)
+            base_cfg["keywords"] = merged
+
+        json_bytes = json.dumps(base_cfg, indent=4).encode("utf-8")
+        resp = HttpResponse(json_bytes, content_type="application/json")
+        resp["Content-Disposition"] = 'attachment; filename="config.json"'
+        return resp
 
     return FileResponse(open(target_path, "rb"), as_attachment=True, filename=filename)
 

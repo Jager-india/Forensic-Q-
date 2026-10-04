@@ -40,7 +40,9 @@ DEFAULT_CHAT_WATCHLIST = [
 
 
 def screen_message_text(
-    text: str, custom_watchlist: list[tuple[str, int, str]] | None = None
+    text: str,
+    custom_watchlist: list[tuple[str, int, str]] | None = None,
+    extra_keywords: list[str] | None = None,
 ) -> tuple[int, list[str]]:
     """
     Screens message text against forensic keywords.
@@ -60,6 +62,16 @@ def screen_message_text(
         if re.search(pattern, text_lower):
             flagged.append(term)
             total_score += weight
+
+    if extra_keywords:
+        for term in extra_keywords:
+            term_clean = term.strip().lower()
+            if not term_clean:
+                continue
+            pattern = r"\b" + re.escape(term_clean) + r"\b"
+            if re.search(pattern, text_lower) and term not in flagged:
+                flagged.append(term)
+                total_score += 25
 
     risk_score = min(100, total_score)
     return risk_score, flagged
@@ -165,7 +177,9 @@ def parse_whatsapp_datetime(date_str: str, time_str: str) -> datetime:
     return datetime.now(UTC)
 
 
-def parse_whatsapp_export(content: str) -> list[dict[str, Any]]:
+def parse_whatsapp_export(
+    content: str, extra_keywords: list[str] | None = None
+) -> list[dict[str, Any]]:
     """
     Parses a raw WhatsApp exported text file into structured messages.
     Supports multi-line messages, media attachment tags, and deleted flags.
@@ -240,7 +254,11 @@ def parse_whatsapp_export(content: str) -> list[dict[str, Any]]:
                 ):
                     is_deleted = True
 
-                score, flagged = (0, []) if is_system else screen_message_text(text)
+                score, flagged = (
+                    (0, [])
+                    if is_system
+                    else screen_message_text(text, extra_keywords=extra_keywords)
+                )
 
                 current_msg = {
                     "sender_name": sender,
@@ -311,7 +329,9 @@ def parse_whatsapp_export(content: str) -> list[dict[str, Any]]:
         if not matched and current_msg:
             current_msg["message_text"] += "\n" + line_clean
             if not current_msg.get("is_system"):
-                score, flagged = screen_message_text(current_msg["message_text"])
+                score, flagged = screen_message_text(
+                    current_msg["message_text"], extra_keywords=extra_keywords
+                )
                 current_msg["risk_score"] = score
                 current_msg["flagged_terms"] = flagged
 
@@ -321,7 +341,9 @@ def parse_whatsapp_export(content: str) -> list[dict[str, Any]]:
     return messages
 
 
-def parse_json_export(content: str) -> list[dict[str, Any]]:
+def parse_json_export(
+    content: str, extra_keywords: list[str] | None = None
+) -> list[dict[str, Any]]:
     """
     Parses JSON chat exports (Teams, Slack, Telegram).
     """
@@ -370,7 +392,7 @@ def parse_json_export(content: str) -> list[dict[str, Any]]:
             sender = "System"
             score, flagged = 0, []
         else:
-            score, flagged = screen_message_text(text)
+            score, flagged = screen_message_text(text, extra_keywords=extra_keywords)
 
         has_media = bool(
             item.get("has_media")
@@ -400,7 +422,7 @@ def parse_json_export(content: str) -> list[dict[str, Any]]:
     return messages
 
 
-def parse_csv_export(content: str) -> list[dict[str, Any]]:
+def parse_csv_export(content: str, extra_keywords: list[str] | None = None) -> list[dict[str, Any]]:
     """
     Parses CSV chat exports.
     """
@@ -444,7 +466,7 @@ def parse_csv_export(content: str) -> list[dict[str, Any]]:
             sender = "System"
             score, flagged = 0, []
         else:
-            score, flagged = screen_message_text(text)
+            score, flagged = screen_message_text(text, extra_keywords=extra_keywords)
 
         messages.append(
             {
@@ -475,16 +497,18 @@ def parse_csv_export(content: str) -> list[dict[str, Any]]:
     return messages
 
 
-def ingest_chat_file(file_content: str, filename: str) -> list[dict[str, Any]]:
+def ingest_chat_file(
+    file_content: str, filename: str, extra_keywords: list[str] | None = None
+) -> list[dict[str, Any]]:
     """
     Master file router for chat ingestion.
     """
     ext = Path(filename).suffix.lower()
 
     if ext == ".json":
-        return parse_json_export(file_content)
+        return parse_json_export(file_content, extra_keywords=extra_keywords)
     elif ext == ".csv":
-        return parse_csv_export(file_content)
+        return parse_csv_export(file_content, extra_keywords=extra_keywords)
     else:
         # Default to WhatsApp / text format
-        return parse_whatsapp_export(file_content)
+        return parse_whatsapp_export(file_content, extra_keywords=extra_keywords)
