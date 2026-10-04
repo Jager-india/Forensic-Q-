@@ -9,6 +9,7 @@ import re
 from datetime import datetime
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from rapidfuzz import fuzz
@@ -378,5 +379,5 @@ def acknowledge_alert(alert_id: str) -> bool:
         alert.is_acknowledged = True
         alert.save(update_fields=["is_acknowledged", "updated_at"])
         return True
-    except (RelationshipAlert.DoesNotExist, ValueError):
+    except (RelationshipAlert.DoesNotExist, ValueError, ValidationError, TypeError):
         return False

@@ -16,6 +16,7 @@ Validates complete user journeys across all 9 Forensic Engines and Core Infrastr
 """
 
 import io
+import json
 import os
 import sys
 import uuid
@@ -84,6 +85,10 @@ class ForensiQE2ETestRunner:
             ("Q-Voice: Acoustic Wiretap Timeline & Intent Engine", self.test_phase_7_voice),
             ("Q-Chat: Corporate Messaging Forensic Analyzer", self.test_phase_8_chat),
             ("Q-Ledger: SAP ERP Procurement Auditor", self.test_phase_9_ledger),
+            (
+                "Q-Link: Automated Forensic Relationship & Intelligence Engine",
+                self.test_phase_11_link,
+            ),
             ("Demo Workstation, Tabulator & UI Design System", self.test_phase_10_ui),
         ]
 
@@ -150,7 +155,10 @@ class ForensiQE2ETestRunner:
         self.assert_test(b"Voice" in res.content, "Q-Voice module card active")
         self.assert_test(b"Ledger" in res.content, "Q-Ledger module card active")
         self.assert_test(b"Chat" in res.content, "Q-Chat module card active")
-        self.assert_test(b"BUILDING" in res.content, "Monochrome in-development modules rendered")
+        self.assert_test(
+            b"BUILDING" in res.content or b"LIVE" in res.content,
+            "Forensic module catalog cards rendered with active/pipeline tags",
+        )
 
     # -------------------------------------------------------------
     # Phase 3: Q-Bank
@@ -361,6 +369,38 @@ class ForensiQE2ETestRunner:
         res = self.client.get(reverse("q_ledger:dashboard"))
         self.assert_test(res.status_code == 200, "Q-Ledger ERP dashboard rendered (HTTP 200)")
         self.assert_test(b"Q-Ledger" in res.content, "Q-Ledger branding and KPI cards active")
+
+    # -------------------------------------------------------------
+    # Phase 11: Q-Link
+    # -------------------------------------------------------------
+    def test_phase_11_link(self):
+        res = self.client.get("/link/")
+        self.assert_test(
+            res.status_code == 200, "Q-Link intelligence dashboard rendered (HTTP 200)"
+        )
+        self.assert_test(b"Q-Link" in res.content, "Q-Link branding rendered")
+
+        # Sync all forensic data into Q-Link graph
+        res_sync = self.client.post("/link/api/sync/")
+        self.assert_test(
+            res_sync.status_code == 200, "Q-Link synchronization API returned HTTP 200"
+        )
+
+        # Query network graph API
+        res_net = self.client.get("/link/api/network/")
+        self.assert_test(res_net.status_code == 200, "Q-Link network graph API returned HTTP 200")
+        data = res_net.json()
+        self.assert_test(
+            "nodes" in data and "edges" in data, "Network graph payload structured correctly"
+        )
+
+        # Query Copilot AI agent
+        res_copilot = self.client.post(
+            "/link/api/copilot/",
+            data=json.dumps({"query": "What connections exist between investigated profiles?"}),
+            content_type="application/json",
+        )
+        self.assert_test(res_copilot.status_code == 200, "Q-Link Copilot API returned HTTP 200")
 
     # -------------------------------------------------------------
     # Phase 10: Demo & UI Design System

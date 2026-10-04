@@ -170,6 +170,29 @@ class QLinkAgentToolCallingTests(TestCase):
         self.assertEqual(res["target_entity"], "Arun Kumar")
         self.assertEqual(res["connected_nodes_count"], 2)
 
+        # Test find_paths_between
+        res_paths = ForensicToolRegistry.execute_tool(
+            "find_paths_between",
+            {"source_name": "Arun Kumar", "target_name": "Alpha Traders", "max_hops": 3},
+        )
+        self.assertEqual(res_paths["status"], "success")
+
+        # Test get_entity_timeline
+        res_time = ForensicToolRegistry.execute_tool(
+            "get_entity_timeline", {"entity_name": "Arun Kumar"}
+        )
+        self.assertEqual(res_time["status"], "success")
+
+        # Test get_evidence_details
+        res_ev = ForensicToolRegistry.execute_tool(
+            "get_evidence_details", {"entity_name": "Arun Kumar"}
+        )
+        self.assertEqual(res_ev["status"], "success")
+
+        # Test error paths
+        err_res = ForensicToolRegistry.execute_tool("unknown_tool", {})
+        self.assertEqual(err_res["status"], "error")
+
     def test_copilot_agent_fallback(self):
         agent = ForensicCopilotAgent()
         out = agent.analyze_investigative_query("Investigate Arun Kumar")
@@ -223,3 +246,120 @@ class QLinkAPITests(TestCase):
         data = resp.json()
         self.assertEqual(data["status"], "success")
         self.assertIn("response", data)
+
+    def test_api_sync_and_alert_ack(self):
+        # Test manual sync API
+        sync_resp = self.client.post("/link/api/sync/")
+        self.assertEqual(sync_resp.status_code, 200)
+        sync_data = sync_resp.json()
+        self.assertEqual(sync_data["status"], "success")
+        self.assertIn("stats", sync_data)
+
+        # Create alert and test acknowledgement
+        alert = RelationshipAlert.objects.create(
+            primary_entity=self.emp,
+            title="Suspicious Loop Detected",
+            alert_level=RelationshipAlert.AlertLevel.HIGH,
+            risk_score=85,
+            trigger_reason="Circular flow between Subject and Vendor",
+        )
+        ack_resp = self.client.post(f"/link/api/alert/{alert.id}/ack/")
+        self.assertEqual(ack_resp.status_code, 200)
+        self.assertEqual(ack_resp.json()["status"], "success")
+        alert.refresh_from_db()
+        self.assertTrue(alert.is_acknowledged)
+
+
+class QLinkSyncAllTests(TestCase):
+    """Tests the sync_all_modules ingestion engine across models."""
+
+    def test_sync_all_execution(self):
+        from decimal import Decimal
+
+        from django.apps import apps
+
+        from .backend.sync_all import sync_all_modules
+
+        # Create Q-Ledger PO
+        VendorMaster = apps.get_model("q_ledger", "VendorMaster")
+        PurchaseOrder = apps.get_model("q_ledger", "PurchaseOrder")
+        vendor = VendorMaster.objects.create(vendor_code="V-TEST-99", vendor_name="Alpha Tech Corp")
+        PurchaseOrder.objects.create(
+            vendor=vendor,
+            po_number="PO-TEST-100",
+            total_amount=Decimal("150000.00"),
+            approved_by="Jane Doe",
+            po_date=timezone.now(),
+        )
+
+        # Create Q-Trail path
+        FundTrailPath = apps.get_model("q_trail", "FundTrailPath")
+        FundTrailPath.objects.create(
+            source_entity="Source Company A",
+            destination_entity="Dest Vendor B",
+            hop_count=2,
+            total_amount=Decimal("500000.00"),
+            intermediate_hops=[{"entity": "Conduit Intermediary X", "amount": 500000.0}],
+            is_circular=False,
+        )
+
+        counts = sync_all_modules()
+        self.assertIsInstance(counts, dict)
+        self.assertGreaterEqual(counts["q_ledger"], 1)
+        self.assertGreaterEqual(counts["q_trail"], 1)
+
+
+class QLinkDeepCoverageTests(TestCase):
+    """Deep edge-case coverage for selectors and services to guarantee >=90% CI threshold."""
+
+    def test_selectors_and_services_branches(self):
+        from .selectors import (
+            find_paths_between,
+            get_all_entities,
+            get_entity_by_id,
+            get_entity_network,
+            get_recent_alerts,
+        )
+        from .services import acknowledge_alert, normalize_identifier, resolve_or_create_entity
+
+        # Normalization edge cases
+        self.assertEqual(
+            normalize_identifier("+91-98765-43210", ForensicEntity.EntityType.PHONE),
+            "PHONE:919876543210",
+        )
+        self.assertEqual(
+            normalize_identifier("PO 12345", ForensicEntity.EntityType.PO), "PO:PO12345"
+        )
+        self.assertEqual(
+            normalize_identifier("INV 9988", ForensicEntity.EntityType.INVOICE), "INV:INV9988"
+        )
+
+        # Entity target promotion
+        e, _ = resolve_or_create_entity(
+            "Promote Target", ForensicEntity.EntityType.EMPLOYEE, is_target=False
+        )
+        self.assertFalse(e.is_target)
+        e2, _ = resolve_or_create_entity(
+            "Promote Target", ForensicEntity.EntityType.EMPLOYEE, is_target=True
+        )
+        self.assertTrue(e2.is_target)
+
+        # Non-existent lookups
+        self.assertIsNone(get_entity_by_id("non-existent-uuid"))
+        net = get_entity_network("non-existent-uuid")
+        self.assertEqual(net["nodes"], [])
+        self.assertFalse(acknowledge_alert("non-existent-uuid"))
+
+        # Selectors filtering
+        entities = get_all_entities(
+            search_query="Promote", entity_type=ForensicEntity.EntityType.EMPLOYEE, is_target=True
+        )
+        self.assertGreaterEqual(entities.count(), 1)
+
+        # Same entity pathfinding
+        paths = find_paths_between(str(e.id), str(e.id))
+        self.assertEqual(paths, [])
+
+        # Recent alerts unacknowledged
+        alerts = get_recent_alerts(unacknowledged_only=True)
+        self.assertIsNotNone(alerts)

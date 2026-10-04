@@ -7,6 +7,7 @@ to eliminate N+1 queries across the forensic knowledge graph.
 from collections import deque
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.db.models import Q, QuerySet
 
 from .models import (
@@ -56,7 +57,7 @@ def get_entity_by_id(entity_id: str) -> ForensicEntity | None:
             "out_relations__target_entity",
             "in_relations__source_entity",
         ).get(id=entity_id)
-    except (ForensicEntity.DoesNotExist, ValueError):
+    except (ForensicEntity.DoesNotExist, ValueError, TypeError, ValidationError):
         return None
 
 
