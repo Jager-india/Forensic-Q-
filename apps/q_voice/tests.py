@@ -6,6 +6,8 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from core.models import InvestigationProfile
+
 from .backend.voice_parser import (
     extract_speaker_and_text,
     ingest_transcript_content,
@@ -15,9 +17,13 @@ from .backend.voice_parser import (
 )
 from .models import AudioRecording, TranscriptSegment, VoiceWatchlistRule
 from .selectors import (
+    get_all_custodian_profiles,
     get_all_recordings,
+    get_combined_timeline_for_custodian,
     get_combined_timeline_for_recording,
+    get_custodian_profile_detail,
     get_global_voice_metrics,
+    get_metrics_for_custodian,
     get_metrics_for_recording,
     get_recording_by_id,
 )
@@ -450,6 +456,7 @@ Speaker 2: Understood, concealing the invoice margin now
         mock_rec = MagicMock()
         mock_rec.id = self.recording.id
         mock_rec.call_ref = "CALL-POST-001"
+        mock_rec.custodian_name = "Auditee"
         mock_rec.transcription_status = AudioRecording.TranscriptionStatus.COMPLETED
         mock_ingest.return_value = (mock_rec, "")
 
@@ -464,7 +471,8 @@ Speaker 2: Understood, concealing the invoice margin now
             },
         )
         self.assertEqual(res_ok.status_code, 302)
-        self.assertIn(f"/voice/recording/{self.recording.id}/", res_ok.url)
+        self.assertIn("Auditee", res_ok.url)
+        self.assertIn(f"recording_id={self.recording.id}", res_ok.url)
 
         # 3. POST with audio file and ingestion failure
         mock_rec_fail = MagicMock()
@@ -475,3 +483,167 @@ Speaker 2: Understood, concealing the invoice margin now
         res_fail = self.client.post(url, data={"audio_file": dummy_audio_fail})
         self.assertEqual(res_fail.status_code, 200)
         self.assertEqual(res_fail.context["status"], "error")
+
+
+class QVoiceCustodianProfileTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        session = self.client.session
+        session["portal_authenticated"] = True
+        session.save()
+
+        self.profile = InvestigationProfile.objects.create(
+            full_name="Rajesh Sharma",
+            employee_id="EMP-7701",
+            department="Procurement",
+            designation="Chief Buyer",
+        )
+
+        self.rec1 = AudioRecording.objects.create(
+            call_ref="CALL-RAJ-001",
+            call_title="Supplier Call 1",
+            custodian_name="Rajesh Sharma",
+            call_timestamp=timezone.now(),
+            duration_seconds=120,
+            risk_score=80,
+            detected_intent_summary="Collusion",
+            total_segments=2,
+            flagged_segments_count=1,
+            transcription_status=AudioRecording.TranscriptionStatus.COMPLETED,
+        )
+        TranscriptSegment.objects.create(
+            recording=self.rec1,
+            speaker_tag="Rajesh Sharma",
+            start_time_seconds=0.0,
+            end_time_seconds=30.0,
+            text_content="Let us discuss the secret kickback for the contract.",
+            detected_intent=TranscriptSegment.IntentCategory.COLLUSION,
+            risk_score=80,
+        )
+        TranscriptSegment.objects.create(
+            recording=self.rec1,
+            speaker_tag="Vendor",
+            start_time_seconds=30.0,
+            end_time_seconds=60.0,
+            text_content="We can transfer the cash via HDFC account.",
+            detected_intent=TranscriptSegment.IntentCategory.PRICE_NEGOTIATION,
+            risk_score=50,
+        )
+
+        self.rec2 = AudioRecording.objects.create(
+            call_ref="CALL-RAJ-002",
+            call_title="Supplier Call 2",
+            custodian_name="Rajesh Sharma",
+            call_timestamp=timezone.now(),
+            duration_seconds=180,
+            risk_score=60,
+            detected_intent_summary="Price Negotiation",
+            total_segments=1,
+            flagged_segments_count=0,
+            transcription_status=AudioRecording.TranscriptionStatus.COMPLETED,
+        )
+        TranscriptSegment.objects.create(
+            recording=self.rec2,
+            speaker_tag="Rajesh Sharma",
+            start_time_seconds=0.0,
+            end_time_seconds=45.0,
+            text_content="Verify the updated quote with procurement team.",
+            detected_intent=TranscriptSegment.IntentCategory.GENERAL,
+            risk_score=10,
+        )
+
+        # Also create a general custodian recording
+        self.rec_gen = AudioRecording.objects.create(
+            call_ref="CALL-GEN-001",
+            call_title="General Call",
+            custodian_name="",
+            call_timestamp=timezone.now(),
+            duration_seconds=60,
+            risk_score=20,
+            total_segments=1,
+        )
+
+    def test_get_all_custodian_profiles(self):
+        profiles = get_all_custodian_profiles()
+        self.assertGreaterEqual(len(profiles), 2)
+
+        rajesh = next((p for p in profiles if p["custodian_name"] == "Rajesh Sharma"), None)
+        self.assertIsNotNone(rajesh)
+        self.assertEqual(rajesh["recordings_count"], 2)
+        self.assertEqual(rajesh["total_duration_seconds"], 300)
+        self.assertEqual(rajesh["total_duration_formatted"], "05:00")
+        self.assertEqual(rajesh["total_segments"], 3)
+        self.assertEqual(rajesh["max_risk_score"], 80)
+        self.assertEqual(rajesh["department"], "Procurement")
+        self.assertEqual(rajesh["employee_id"], "EMP-7701")
+
+        general = next((p for p in profiles if p["custodian_name"] == "General Custodian"), None)
+        self.assertIsNotNone(general)
+        self.assertEqual(general["recordings_count"], 1)
+
+    def test_get_custodian_profile_detail(self):
+        detail = get_custodian_profile_detail("Rajesh Sharma")
+        self.assertEqual(detail["custodian_name"], "Rajesh Sharma")
+        self.assertEqual(detail["recordings_count"], 2)
+        self.assertEqual(detail["total_duration_seconds"], 300)
+        self.assertEqual(detail["department"], "Procurement")
+
+        gen_detail = get_custodian_profile_detail("General Custodian")
+        self.assertEqual(gen_detail["custodian_name"], "General Custodian")
+        self.assertEqual(gen_detail["recordings_count"], 1)
+
+    def test_get_combined_timeline_for_custodian(self):
+        # Combined view (all recordings)
+        combined = get_combined_timeline_for_custodian("Rajesh Sharma")
+        self.assertEqual(len(combined), 3)
+        self.assertTrue(any(item["call_ref"] == "CALL-RAJ-001" for item in combined))
+        self.assertTrue(any(item["call_ref"] == "CALL-RAJ-002" for item in combined))
+
+        # Scoped view (only rec1)
+        scoped = get_combined_timeline_for_custodian("Rajesh Sharma", recording_id=self.rec1.id)
+        self.assertEqual(len(scoped), 2)
+        self.assertTrue(all(item["call_ref"] == "CALL-RAJ-001" for item in scoped))
+
+    def test_get_metrics_for_custodian(self):
+        metrics = get_metrics_for_custodian("Rajesh Sharma")
+        self.assertEqual(metrics["total_segments"], 3)
+        self.assertGreaterEqual(metrics["risk_score"], 80)
+        self.assertGreaterEqual(metrics["suspicious_count"], 1)
+
+        # Scoped metrics
+        scoped_metrics = get_metrics_for_custodian("Rajesh Sharma", recording_id=self.rec2.id)
+        self.assertEqual(scoped_metrics["total_segments"], 1)
+
+    def test_custodian_detail_view(self):
+        # Combined view
+        res = self.client.get(
+            reverse("q_voice:custodian_detail", kwargs={"custodian_name": "Rajesh Sharma"})
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"Rajesh Sharma", res.content)
+        self.assertIn(b"All Recordings Combined", res.content)
+        self.assertIn(b"CALL-RAJ-001", res.content)
+        self.assertIn(b"CALL-RAJ-002", res.content)
+
+        # Scoped view with recording_id parameter
+        res_scoped = self.client.get(
+            reverse("q_voice:custodian_detail", kwargs={"custodian_name": "Rajesh Sharma"})
+            + f"?recording_id={self.rec1.id}"
+        )
+        self.assertEqual(res_scoped.status_code, 200)
+        self.assertEqual(res_scoped.context["selected_recording"], self.rec1)
+
+        # 404 for non-existent custodian
+        res_404 = self.client.get(
+            reverse("q_voice:custodian_detail", kwargs={"custodian_name": "NonExistentPerson"})
+        )
+        self.assertEqual(res_404.status_code, 404)
+
+    def test_delete_custodian_view(self):
+        res = self.client.post(
+            reverse("q_voice:delete_custodian", kwargs={"custodian_name": "Rajesh Sharma"}),
+            follow=True,
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(AudioRecording.objects.filter(custodian_name="Rajesh Sharma").exists())
+        self.assertFalse(TranscriptSegment.objects.filter(recording=self.rec1).exists())

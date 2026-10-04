@@ -13,6 +13,7 @@ import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from loguru import logger
 
@@ -307,3 +308,27 @@ def delete_audio_recording(recording_id: str | uuid.UUID) -> bool:
         return True
     except (AudioRecording.DoesNotExist, ValueError, ValidationError):
         return False
+
+
+@transaction.atomic
+def delete_custodian_recordings(custodian_name: str) -> int:
+    """
+    Deletes all audio recordings and associated segments for a custodian profile.
+    """
+    clean_name = custodian_name.strip()
+    is_general = clean_name.lower() in ("general custodian", "unassigned", "")
+
+    if is_general:
+        qs = AudioRecording.objects.filter(
+            Q(custodian_name="")
+            | Q(custodian_name__iexact="General Custodian")
+            | Q(custodian_name__isnull=True)
+        )
+    else:
+        qs = AudioRecording.objects.filter(custodian_name__iexact=clean_name)
+
+    count = qs.count()
+    if count > 0:
+        qs.delete()
+        logger.info(f"Deleted {count} audio recording(s) for custodian '{custodian_name}'")
+    return count

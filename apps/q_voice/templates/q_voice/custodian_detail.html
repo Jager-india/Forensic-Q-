@@ -1,0 +1,607 @@
+<c-base title="Q-Voice | Custodian: {{ custodian_name }}">
+
+    <!-- Styles for Forensic Timeline & Hotword Badges -->
+    <style>
+        .timeline-scroll-track {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            position: relative;
+            padding: 1.5rem 0.5rem;
+        }
+
+        .timeline-flex-wrapper {
+            display: inline-flex;
+            flex-direction: row;
+            align-items: center;
+            position: relative;
+            min-width: 100%;
+            padding-bottom: 0.5rem;
+        }
+
+        .timeline-flex-wrapper::before {
+            content: "";
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            height: 3px;
+            background: rgba(148, 163, 184, 0.25);
+            z-index: 1;
+        }
+
+        .timeline-node-pillar {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+            cursor: pointer;
+            width: 72px;
+            flex-shrink: 0;
+            transition: transform 0.15s ease;
+        }
+
+        .timeline-node-pillar:hover {
+            transform: translateY(-2px);
+        }
+
+        .timeline-flag-bubble {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 13px;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+        }
+
+        .flag-clean {
+            background: #e2e8f0;
+            color: #64748b;
+            border: 2px solid #cbd5e1;
+        }
+        .dark .flag-clean {
+            background: #27272a;
+            color: #a1a1aa;
+            border: 2px solid #3f3f46;
+        }
+
+        .flag-triggered {
+            background: #ef4444;
+            color: #ffffff;
+            border: 2px solid #fca5a5;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
+        }
+
+        .pillar-label-time {
+            font-size: 10.5px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            color: var(--color-theme-muted, #71717a);
+        }
+
+        /* Hotword Badges */
+        .tag-pill-identity {
+            background: rgba(168, 85, 247, 0.15);
+            color: #9333ea;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+        .dark .tag-pill-identity {
+            background: rgba(168, 85, 247, 0.2);
+            color: #c084fc;
+            border-color: rgba(168, 85, 247, 0.4);
+        }
+
+        .tag-pill-financial {
+            background: rgba(16, 185, 129, 0.15);
+            color: #059669;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .dark .tag-pill-financial {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+
+        .tag-pill-suspicious {
+            background: rgba(245, 158, 11, 0.15);
+            color: #d97706;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+        }
+        .dark .tag-pill-suspicious {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border-color: rgba(245, 158, 11, 0.4);
+        }
+
+        .forensic-text-highlight {
+            background: rgba(239, 68, 68, 0.18);
+            color: #dc2626;
+            padding: 1px 4px;
+            border-radius: 4px;
+            font-weight: 700;
+        }
+        .dark .forensic-text-highlight {
+            background: rgba(239, 68, 68, 0.28);
+            color: #f87171;
+        }
+    </style>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        <!-- ============================================================ -->
+        <!-- 1. PAGE HEADER (Navigates back to Common Hub) -->
+        <!-- ============================================================ -->
+        <c-page_header
+            title="{{ custodian_name }}"
+            subtitle="{% if custodian.department %}{{ custodian.department }}{% endif %}{% if custodian.designation %} • {{ custodian.designation }}{% endif %}{% if custodian.employee_id %} • ID: {{ custodian.employee_id }}{% endif %} • {{ recordings|length }} Voice Intercept(s)"
+            icon="fa-solid fa-user-tie"
+            icon_color="text-indigo-400"
+            back_url="/voice/">
+            
+            <div class="flex items-center gap-2.5">
+                <!-- Delete Custodian -->
+                <form method="POST" action="{% url 'q_voice:delete_custodian' custodian_name %}" onsubmit="return confirm('Are you sure you want to delete this custodian profile and all associated audio cases?');" class="inline">
+                    {% csrf_token %}
+                    <button type="submit"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 transition-all cursor-pointer">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span>Delete Custodian</span>
+                    </button>
+                </form>
+
+                <!-- Standard ForensiQ Primary Action Button -->
+                <button type="button"
+                    onclick="window.dispatchEvent(new CustomEvent('open-voice-modal'))"
+                    @click="$dispatch('open-voice-modal')"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition-all transform hover:-translate-y-0.5 cursor-pointer">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Import Audio Recording</span>
+                </button>
+            </div>
+        </c-page_header>
+
+        <!-- ============================================================ -->
+        <!-- 2. 4 EXECUTIVE KPI STAT CARDS (For this Custodian Profile) -->
+        <!-- ============================================================ -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- Identities Flagged -->
+            <c-stat_card
+                title="Identities Flagged"
+                value="{{ metrics.identities_count }}"
+                badge="Custodians & Leads"
+                badge_type="info"
+                icon="fa-solid fa-id-badge" />
+
+            <!-- Financial Terms -->
+            <c-stat_card
+                title="Financial Hotwords"
+                value="{{ metrics.financial_count }}"
+                badge="Payments & UPI"
+                badge_type="success"
+                icon="fa-solid fa-wallet" />
+
+            <!-- Suspicious Targets -->
+            <c-stat_card
+                title="Suspicious Parameters"
+                value="{{ metrics.suspicious_count }}"
+                badge="Collusion / Concealment"
+                badge_type="warning"
+                icon="fa-solid fa-triangle-exclamation" />
+
+            <!-- Duration & Segments -->
+            <c-stat_card
+                title="Acoustic Segments"
+                value="{{ metrics.total_segments }}"
+                badge="{{ metrics.duration_formatted }}"
+                badge_type="neutral"
+                icon="fa-solid fa-bars-staggered" />
+
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- 3. MULTI-RECORDING SELECTION BAR (Exact parity with Q-Bank & Q-Chat) -->
+        <!-- ============================================================ -->
+        <div class="bg-theme-surface rounded-2xl border border-theme-border p-4 shadow-sm space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-microphone-lines text-indigo-400 text-sm"></i>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-theme-text">
+                        Linked Voice Intercepts ({{ recordings|length }})
+                    </h4>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- Combined View Pill -->
+                <a href="{% url 'q_voice:custodian_detail' custodian_name %}"
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2
+                   {% if not selected_recording_id %}bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/20{% else %}bg-theme-app text-theme-muted border-theme-border hover:border-theme-border/80 hover:text-theme-text{% endif %}">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span>All Recordings Combined</span>
+                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-mono {% if not selected_recording_id %}bg-indigo-700 text-indigo-100{% else %}bg-theme-surface text-theme-muted{% endif %}">
+                        {{ recordings|length }} audios
+                    </span>
+                </a>
+
+                <!-- Individual Audio Recording Pills -->
+                {% for rec in recordings %}
+                <a href="{% url 'q_voice:custodian_detail' custodian_name %}?recording_id={{ rec.id }}"
+                    class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2
+                   {% if selected_recording_id == rec.id|stringformat:'s' %}bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/20{% else %}bg-theme-app text-theme-muted border-theme-border hover:border-theme-border/80 hover:text-theme-text{% endif %}"
+                    title="{{ rec.call_title }} ({{ rec.call_ref }}) • {{ rec.duration_formatted }} • {{ rec.total_segments }} segments">
+                    <i class="fa-solid fa-file-waveform text-indigo-400 text-[11px]"></i>
+                    <span>{{ rec.call_ref }}</span>
+                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-mono {% if selected_recording_id == rec.id|stringformat:'s' %}bg-indigo-700 text-indigo-100{% else %}bg-theme-surface text-theme-muted{% endif %}">
+                        {{ rec.duration_formatted }}
+                    </span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- 4. INTERACTIVE HORIZONTAL TIMELINE RESOLUTION TRACK -->
+        <!-- ============================================================ -->
+        <div class="p-5 rounded-2xl bg-theme-surface border border-theme-border shadow-sm space-y-4">
+            
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-timeline text-indigo-400"></i>
+                    <h3 class="text-sm font-bold text-theme-text">Forensic Timeline Resolution Track</h3>
+                    <span class="text-xs text-theme-muted">&bull; Click node pillars to focus verbatim acoustic frames</span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <label for="intervalSelectorNode" class="text-xs text-theme-muted font-medium">Range Resolution:</label>
+                    <select id="intervalSelectorNode"
+                        class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-indigo-500 cursor-pointer">
+                        <option value="15">15 Seconds</option>
+                        <option value="30" selected>30 Seconds</option>
+                        <option value="60">60 Seconds</option>
+                        <option value="120">120 Seconds</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Horizontal Track Scroll Area -->
+            <div class="timeline-scroll-track scrollbar-thin">
+                <div id="timelineContainerFlex" class="timeline-flex-wrapper"></div>
+            </div>
+
+            <!-- Active Focus Panel (Appears when pillar node is clicked) -->
+            <div id="activeFocusPanel" style="display: none;"
+                class="p-4 rounded-xl bg-theme-app/60 border border-theme-border/80 transition-all space-y-2">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="font-bold text-theme-text flex items-center gap-1.5">
+                            <i class="fa-regular fa-clock text-indigo-400"></i>
+                            <span id="activeIntervalTimeLabel">00:00:00 - 00:00:30</span>
+                        </span>
+                        <span class="text-theme-muted">&bull;</span>
+                        <span id="activeIntervalFlagCount"
+                            class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-500 border border-rose-500/30">
+                            0 Targets Flagged
+                        </span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('activeFocusPanel').style.display='none';"
+                        class="text-xs text-theme-muted hover:text-theme-text cursor-pointer">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div id="activeIntervalTranscriptOutput"
+                    class="text-xs leading-relaxed text-theme-text font-mono bg-theme-surface/70 p-3 rounded-lg border border-theme-border/50">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- 5. VERBATIM TRANSCRIPT DATA TABLE -->
+        <!-- ============================================================ -->
+        <div class="p-5 rounded-2xl bg-theme-surface border border-theme-border shadow-sm space-y-4" x-data="{ searchQuery: '' }">
+            
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h3 class="text-sm font-bold text-theme-text flex items-center gap-2">
+                        <i class="fa-solid fa-microphone text-amber-500"></i>
+                        <span>Acoustic Verbatim Transcript</span>
+                    </h3>
+                    <p class="text-xs text-theme-muted">
+                        {% if selected_recording %}
+                        Showing utterances for <span class="font-bold text-theme-text">{{ selected_recording.call_ref }}</span> ({{ selected_recording.call_title }}).
+                        {% else %}
+                        Showing combined utterances across all {{ recordings|length }} voice intercept(s) for {{ custodian_name }}.
+                        {% endif %}
+                    </p>
+                </div>
+
+                <!-- Table Search Filter -->
+                <div class="w-64">
+                    <input type="text" x-model="searchQuery" placeholder="Filter utterances, speakers, or refs..."
+                        class="w-full px-3 py-1.5 rounded-xl text-xs bg-theme-app border border-theme-border text-theme-text placeholder-theme-muted focus:outline-none focus:border-indigo-500" />
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="overflow-x-auto max-h-[550px] rounded-xl border border-theme-border scrollbar-thin">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead class="sticky top-0 bg-theme-app border-b border-theme-border z-10">
+                        <tr>
+                            {% if not selected_recording %}
+                            <th class="py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] text-theme-muted whitespace-nowrap">Intercept</th>
+                            {% endif %}
+                            <th class="py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] text-theme-muted whitespace-nowrap">Timeline Range</th>
+                            <th class="py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] text-theme-muted whitespace-nowrap">Speaker</th>
+                            <th class="py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] text-theme-muted">Acoustic Verbatim Text</th>
+                            <th class="py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] text-theme-muted whitespace-nowrap">Extracted Hot-Words</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-theme-border/60 bg-theme-surface">
+                        {% for item in combined_timeline %}
+                        <tr class="hover:bg-theme-subtle/50 transition"
+                            x-show="!searchQuery || '{{ item.transcript|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase()) || '{{ item.speaker|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase()) || '{{ item.call_ref|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase())">
+                            {% if not selected_recording %}
+                            <td class="py-2.5 px-3 text-theme-muted whitespace-nowrap font-mono text-[11px]">
+                                <a href="{% url 'q_voice:custodian_detail' custodian_name %}?recording_id={{ item.recording_id }}"
+                                   class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 font-bold border border-indigo-500/20 transition-colors">
+                                    {{ item.call_ref }}
+                                </a>
+                            </td>
+                            {% endif %}
+                            <td class="py-2.5 px-3 text-theme-muted whitespace-nowrap font-mono text-[11px]">
+                                {{ item.timestamp }}
+                            </td>
+                            <td class="py-2.5 px-3 text-theme-text whitespace-nowrap font-semibold">
+                                <span class="px-2 py-0.5 rounded-md bg-theme-app border border-theme-border/70 text-[11px]">
+                                    {{ item.speaker }}
+                                </span>
+                            </td>
+                            <td class="py-2.5 px-3 text-theme-text leading-relaxed font-mono text-xs">
+                                {{ item.transcript }}
+                            </td>
+                            <td class="py-2.5 px-3 whitespace-nowrap">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    {% for det in item.detections_detail %}
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold 
+                                        {% if det.type == 'identity' %}tag-pill-identity{% elif det.type == 'financial' %}tag-pill-financial{% else %}tag-pill-suspicious{% endif %}">
+                                        {{ det.term }}
+                                    </span>
+                                    {% empty %}
+                                    <span class="text-[11px] text-theme-muted italic">Clear</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{% if not selected_recording %}5{% else %}4{% endif %}" class="p-8 text-center text-theme-muted text-xs">
+                                No transcript segments logged for this custodian profile.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- UPLOAD AUDIO RECORDING MODAL -->
+    <!-- ============================================================ -->
+    <div x-data="{ showModal: false, isSubmitting: false }"
+        @open-voice-modal.window="showModal = true"
+        x-show="showModal"
+        x-cloak
+        class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+        
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" @click="showModal = false"></div>
+
+        <!-- Modal Dialog -->
+        <div class="relative w-full max-w-lg rounded-3xl bg-theme-surface border border-theme-border shadow-2xl p-6 space-y-5 z-10">
+            
+            <div class="flex items-center justify-between pb-3 border-b border-theme-border">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-microphone-lines"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-theme-text">Ingest Call Recording</h3>
+                        <p class="text-[11px] text-theme-muted">Upload audio file for local whisper transcription & hotword screening.</p>
+                    </div>
+                </div>
+                <button type="button" @click="showModal = false" class="text-theme-muted hover:text-theme-text text-sm cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form method="POST" action="{% url 'q_voice:dashboard' %}" enctype="multipart/form-data" @submit="isSubmitting = true">
+                {% csrf_token %}
+
+                <div class="space-y-4">
+                    <!-- Call Reference & Subject -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-theme-text mb-1">Call Ref (Optional)</label>
+                            <input type="text" name="call_ref" placeholder="e.g. CALL-2024-001"
+                                class="w-full px-3 py-2 rounded-xl text-xs bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-indigo-500 font-mono" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-theme-text mb-1">Subject / Label</label>
+                            <input type="text" name="call_title" placeholder="e.g. Vendor Tender Wiretap"
+                                class="w-full px-3 py-2 rounded-xl text-xs bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-indigo-500" />
+                        </div>
+                    </div>
+
+                    <!-- Hidden or default Custodian Name -->
+                    <input type="hidden" name="custodian_name" value="{{ custodian_name }}" />
+
+                    <c-profile_selector
+                        label="Target Auditee / Investigation Profile"
+                        name="profile_id"
+                        new_name="new_profile_name"
+                        new_dept="new_profile_dept"
+                        new_role="new_profile_role"
+                        required="false" />
+
+                    <!-- Audio File Uploader -->
+                    <div>
+                        <c-file_uploader
+                            name="audio_file"
+                            accept=".wav,.mp3"
+                            label="Audio Recording File (.wav, .mp3)"
+                            hint="Click to browse or drag & drop call recording"
+                            badge="Speech AI"
+                            required="true" />
+                    </div>
+
+                    <!-- Endpoint notice -->
+                    <div class="p-3 rounded-xl bg-theme-app border border-theme-border/60 text-[11px] text-theme-muted flex items-start gap-2">
+                        <i class="fa-solid fa-circle-info text-indigo-400 mt-0.5"></i>
+                        <span>Audio is dispatched to the local transcription service at <strong class="text-theme-text font-mono">{{ voice_endpoint|default:"http://127.0.0.1:8434/v1/audio/transcriptions" }}</strong>.</span>
+                    </div>
+
+                </div>
+
+                <div class="mt-6 flex items-center justify-end space-x-3 pt-3 border-t border-theme-border">
+                    <button type="button" @click="showModal = false"
+                        class="px-4 py-2 rounded-xl text-xs font-semibold text-theme-muted hover:text-theme-text bg-theme-app border border-theme-border cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="submit" :disabled="isSubmitting"
+                        class="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-zinc-950 transition flex items-center space-x-2 cursor-pointer disabled:opacity-50">
+                        <span x-show="!isSubmitting"><i class="fa-solid fa-cloud-arrow-up mr-1.5"></i>Begin Transcription</span>
+                        <span x-show="isSubmitting" x-cloak><i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Dispatching Audio...</span>
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    <!-- Client-Side Timeline Interactive Engine -->
+    {% if timeline_json %}
+    <script id="timelineRawJsonData" type="application/json">
+        {{ timeline_json|safe }}
+    </script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const rawDataEl = document.getElementById("timelineRawJsonData");
+            if (!rawDataEl) return;
+
+            let serverRawData = [];
+            try {
+                serverRawData = JSON.parse(rawDataEl.textContent);
+            } catch(e) {
+                console.error("Failed to parse timeline JSON:", e);
+                return;
+            }
+
+            const intervalSelector = document.getElementById("intervalSelectorNode");
+            const timelineContainer = document.getElementById("timelineContainerFlex");
+            const focusPanel = document.getElementById("activeFocusPanel");
+            const focusTimeLabel = document.getElementById("activeIntervalTimeLabel");
+            const focusFlagCount = document.getElementById("activeIntervalFlagCount");
+            const focusTranscriptOutput = document.getElementById("activeIntervalTranscriptOutput");
+
+            const hotwords = [
+                "saravan", "kumar", "indumadhi", "hr", "boss", "manager", "sbi", "icici", "hdfc",
+                "axis", "canara", "thousand", "lakh", "crore", "rupees", "upa", "upi", "gpay",
+                "phonepe", "paytm", "transfer", "bank account", "cac", "transaction", "inquiry",
+                "november", "25,000", "25000", "50,000", "kickback", "bribe", "hawala", "delete",
+                "burn this", "burn", "off the record", "secret deal", "collusion", "tender", "rfq"
+            ];
+
+            function formatSeconds(totalSecs) {
+                let hrs = Math.floor(totalSecs / 3600);
+                let mins = Math.floor((totalSecs % 3600) / 60);
+                let secs = Math.floor(totalSecs % 60);
+                return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            function rebuildTimeline(intervalSeconds) {
+                if (!timelineContainer || !serverRawData || serverRawData.length === 0) return;
+                timelineContainer.innerHTML = "";
+
+                // Determine total duration
+                let maxSec = 0;
+                serverRawData.forEach(item => {
+                    if (item.end_seconds > maxSec) maxSec = item.end_seconds;
+                });
+                if (maxSec <= 0) maxSec = 180;
+
+                for (let start = 0; start < maxSec; start += intervalSeconds) {
+                    let end = Math.min(start + intervalSeconds, maxSec);
+                    let intervalWords = [];
+                    let intervalFlags = 0;
+
+                    serverRawData.forEach(chunk => {
+                        const cStart = chunk.start_seconds;
+                        if (cStart >= start && cStart < end) {
+                            if (chunk.transcript && chunk.transcript.trim() !== "") {
+                                intervalWords.push(chunk.transcript.trim());
+                            }
+                            if (chunk.detections && chunk.detections.length > 0) {
+                                intervalFlags += chunk.detections.length;
+                            }
+                        }
+                    });
+
+                    let compiledText = intervalWords.join(" ");
+
+                    const pillar = document.createElement("div");
+                    pillar.className = "timeline-node-pillar";
+
+                    const isTriggered = intervalFlags > 0;
+                    pillar.innerHTML = `
+                        <div class="timeline-flag-bubble ${isTriggered ? 'flag-triggered' : 'flag-clean'}">
+                            ${intervalFlags}
+                        </div>
+                        <span class="pillar-label-time">${formatSeconds(start).slice(3)}</span>
+                    `;
+
+                    pillar.addEventListener("click", function() {
+                        if (!focusPanel) return;
+                        focusTimeLabel.textContent = `${formatSeconds(start)} - ${formatSeconds(end)}`;
+                        focusFlagCount.textContent = `${intervalFlags} Target${intervalFlags === 1 ? '' : 's'} Flagged`;
+
+                        if (!compiledText || compiledText.trim() === "") {
+                            focusTranscriptOutput.innerHTML = "<span class='text-theme-muted italic'>[No vocal utterance recorded in this interval window]</span>";
+                        } else {
+                            let highlightedHTML = compiledText;
+                            hotwords.forEach(word => {
+                                const escapedWord = word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                                const regex = new RegExp(`\\b(${escapedWord})\\b`, 'gi');
+                                highlightedHTML = highlightedHTML.replace(regex, `<span class="forensic-text-highlight">$1</span>`);
+                            });
+                            focusTranscriptOutput.innerHTML = highlightedHTML;
+                        }
+                        focusPanel.style.display = "block";
+                    });
+
+                    timelineContainer.appendChild(pillar);
+                }
+            }
+
+            if (intervalSelector) {
+                intervalSelector.addEventListener("change", function(e) {
+                    if (focusPanel) focusPanel.style.display = "none";
+                    rebuildTimeline(parseInt(e.target.value, 10));
+                });
+            }
+
+            // Initial build with 30s resolution
+            rebuildTimeline(30);
+        });
+    </script>
+    {% endif %}
+
+</c-base>

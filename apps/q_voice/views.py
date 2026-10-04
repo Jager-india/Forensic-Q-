@@ -1,6 +1,6 @@
 """
 Q-Voice Forensic Views
-Provides a common audios directory dashboard and individual recording dossiers, matching the Q-Bank architecture.
+Provides a common target custodians directory dashboard and unified profile forensic dossiers.
 """
 
 import json
@@ -10,19 +10,23 @@ from typing import Any
 from django.contrib import messages
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 
 from core.profiles import resolve_or_create_profile_from_request
 
 from .models import AudioRecording
 from .selectors import (
+    get_all_custodian_profiles,
     get_all_recordings,
-    get_combined_timeline_for_recording,
+    get_combined_timeline_for_custodian,
+    get_custodian_profile_detail,
     get_global_voice_metrics,
-    get_metrics_for_recording,
+    get_metrics_for_custodian,
     get_recording_by_id,
 )
 from .services import (
     delete_audio_recording,
+    delete_custodian_recordings,
     get_voice_api_endpoint,
     ingest_audio_recording,
 )
@@ -30,11 +34,12 @@ from .services import (
 
 def dashboard_view(request: HttpRequest) -> HttpResponse:
     """
-    Common Q-Voice Hub & Case Directory Dashboard.
-    Displays global platform metrics and the directory of all ingested voice call cases.
+    Common Q-Voice Hub & Target Custodians Directory Dashboard.
+    Displays global platform metrics and the directory of all target custodian profiles.
     """
     context: dict[str, Any] = {
         "status": "idle",
+        "custodians": get_all_custodian_profiles(),
         "recordings": get_all_recordings(),
         "global_metrics": get_global_voice_metrics(),
         "error_message": "",
@@ -77,24 +82,36 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
                 messages.success(
                     request, f"Transcription completed successfully: {recording.call_ref}"
                 )
-                return redirect("q_voice:recording_detail", recording_id=recording.id)
+                target_cust = recording.custodian_name.strip() or "General Custodian"
+                redirect_url = reverse(
+                    "q_voice:custodian_detail", kwargs={"custodian_name": target_cust}
+                )
+                return redirect(f"{redirect_url}?recording_id={recording.id}")
 
     return render(request, "q_voice/dashboard.html", context)
 
 
-def recording_detail_view(request: HttpRequest, recording_id: uuid.UUID) -> HttpResponse:
+def custodian_detail_view(request: HttpRequest, custodian_name: str) -> HttpResponse:
     """
-    Individual Audio Case Forensic Dossier View.
-    Displays interactive horizontal timeline, forensic hotwords, and verbatim speech transcripts for a single recording.
+    Forensic Profile Analysis Workspace for a specific Custodian.
+    Provides multi-recording combined timeline or scoped recording analysis.
     """
-    recording = get_recording_by_id(recording_id)
-    if not recording:
-        raise Http404(f"Voice recording '{recording_id}' not found.")
+    custodian_info = get_custodian_profile_detail(custodian_name)
+    if not custodian_info["recordings"]:
+        raise Http404(f"No voice recording cases found for custodian '{custodian_name}'.")
 
-    timeline = get_combined_timeline_for_recording(recording)
-    metrics = get_metrics_for_recording(recording)
+    recordings = custodian_info["recordings"]
+    selected_recording_id = request.GET.get("recording_id", "").strip() or None
+    selected_recording = None
+    if selected_recording_id:
+        selected_recording = next(
+            (r for r in recordings if str(r.id) == selected_recording_id), None
+        )
 
-    # Prepare JSON string for client-side horizontal interactive timeline
+    query_recording_id = selected_recording.id if selected_recording else None
+    timeline = get_combined_timeline_for_custodian(custodian_name, recording_id=query_recording_id)
+    metrics = get_metrics_for_custodian(custodian_name, recording_id=query_recording_id)
+
     clean_json_timeline = [
         {
             "timestamp": item["timestamp"],
@@ -102,6 +119,7 @@ def recording_detail_view(request: HttpRequest, recording_id: uuid.UUID) -> Http
             "end_seconds": item["end_seconds"],
             "transcript": item["transcript"],
             "speaker": item["speaker"],
+            "call_ref": item.get("call_ref", ""),
             "detections": item["detections"],
             "detections_detail": item["detections_detail"],
         }
@@ -109,7 +127,11 @@ def recording_detail_view(request: HttpRequest, recording_id: uuid.UUID) -> Http
     ]
 
     context: dict[str, Any] = {
-        "recording": recording,
+        "custodian": custodian_info,
+        "custodian_name": custodian_name,
+        "recordings": recordings,
+        "selected_recording": selected_recording,
+        "selected_recording_id": str(selected_recording.id) if selected_recording else "",
         "combined_timeline": timeline,
         "metrics": metrics,
         "timeline_json": json.dumps(clean_json_timeline),
@@ -117,17 +139,55 @@ def recording_detail_view(request: HttpRequest, recording_id: uuid.UUID) -> Http
         "voice_endpoint": get_voice_api_endpoint(),
     }
 
-    return render(request, "q_voice/recording_detail.html", context)
+    return render(request, "q_voice/custodian_detail.html", context)
+
+
+def recording_detail_view(request: HttpRequest, recording_id: uuid.UUID) -> HttpResponse:
+    """
+    Individual Audio Case Forensic Dossier View.
+    Seamlessly routes into the unified custodian profile workspace with the recording selected.
+    """
+    recording = get_recording_by_id(recording_id)
+    if not recording:
+        raise Http404(f"Voice recording '{recording_id}' not found.")
+
+    custodian_name = recording.custodian_name.strip() or "General Custodian"
+    request_params = request.GET.copy()
+    request_params["recording_id"] = str(recording.id)
+    request.GET = request_params
+    return custodian_detail_view(request, custodian_name=custodian_name)
+
+
+def delete_custodian_view(request: HttpRequest, custodian_name: str) -> HttpResponse:
+    """
+    Deletes all audio recordings for a custodian profile and returns to the dashboard.
+    """
+    count = delete_custodian_recordings(custodian_name)
+    if count > 0:
+        messages.success(
+            request, f"Successfully removed {count} audio recording(s) for '{custodian_name}'."
+        )
+    else:
+        messages.error(request, "Target custodian recordings could not be found.")
+
+    return redirect("q_voice:dashboard")
 
 
 def delete_recording_view(request: HttpRequest, recording_id: uuid.UUID) -> HttpResponse:
     """
-    Deletes an audio recording and returns to the common voice dashboard.
+    Deletes an audio recording and returns to the custodian profile or dashboard.
     """
+    recording = get_recording_by_id(recording_id)
+    custodian_name = recording.custodian_name.strip() or "General Custodian" if recording else ""
     success = delete_audio_recording(recording_id)
     if success:
         messages.success(request, "Audio recording and acoustic dossier successfully removed.")
     else:
         messages.error(request, "Audio recording could not be found.")
+
+    if custodian_name:
+        remaining = get_custodian_profile_detail(custodian_name)
+        if remaining["recordings"]:
+            return redirect("q_voice:custodian_detail", custodian_name=custodian_name)
 
     return redirect("q_voice:dashboard")
