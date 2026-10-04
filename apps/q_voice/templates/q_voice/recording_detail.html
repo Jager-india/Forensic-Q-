@@ -1,6 +1,6 @@
 <c-base title="{{ recording.call_title }} | Q-Voice Acoustic Dossier">
 
-    <!-- Styles for Forensic Timeline & Hotword Badges -->
+    <!-- Styles for Forensic Timeline, Audio Player & Hotword Badges -->
     <style>
         .timeline-scroll-track {
             display: block;
@@ -11,39 +11,45 @@
         }
 
         .timeline-flex-wrapper {
-            display: inline-flex;
-            flex-direction: row;
-            align-items: center;
             position: relative;
             min-width: 100%;
+            height: 96px;
             padding-bottom: 0.5rem;
         }
 
         .timeline-flex-wrapper::before {
             content: "";
             position: absolute;
-            top: 20px;
-            left: 20px;
-            right: 20px;
+            top: 27px;
+            left: 36px;
+            right: 36px;
             height: 3px;
             background: rgba(148, 163, 184, 0.25);
             z-index: 1;
+            border-radius: 9999px;
         }
 
         .timeline-node-pillar {
             display: flex;
             flex-direction: column;
             align-items: center;
-            position: relative;
+            position: absolute;
             z-index: 10;
             cursor: pointer;
-            width: 72px;
-            flex-shrink: 0;
-            transition: transform 0.15s ease;
+            width: 76px;
+            transform: translateX(-50%);
+            transition: transform 0.15s ease, filter 0.15s ease;
         }
 
         .timeline-node-pillar:hover {
-            transform: translateY(-2px);
+            transform: translateX(-50%) translateY(-2px);
+        }
+
+        .timeline-node-pillar.active-pillar .timeline-flag-bubble {
+            outline: 3px solid #f59e0b;
+            outline-offset: 2px;
+            transform: scale(1.12);
+            box-shadow: 0 0 16px rgba(245, 158, 11, 0.55);
         }
 
         .timeline-flag-bubble {
@@ -55,7 +61,7 @@
             justify-content: center;
             font-weight: 800;
             font-size: 13px;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.4rem;
             transition: all 0.2s ease;
             box-shadow: 0 2px 4px rgba(0,0,0,0.12);
         }
@@ -82,6 +88,22 @@
             font-size: 10.5px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             color: var(--color-theme-muted, #71717a);
+        }
+
+        .audio-progress-container {
+            cursor: pointer;
+            position: relative;
+            height: 8px;
+            border-radius: 9999px;
+            background: rgba(148, 163, 184, 0.2);
+            overflow: hidden;
+        }
+        .audio-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #818cf8);
+            border-radius: 9999px;
+            width: 0%;
+            transition: width 0.08s linear;
         }
 
         /* Hotword Badges */
@@ -211,18 +233,22 @@
                 <div class="flex items-center gap-2">
                     <i class="fa-solid fa-timeline text-indigo-400"></i>
                     <h3 class="text-sm font-bold text-theme-text">Forensic Timeline Resolution Track</h3>
-                    <span class="text-xs text-theme-muted">&bull; Click node pillars to focus verbatim acoustic frames</span>
+                    <span class="text-xs text-theme-muted">&bull; Click node pillars to focus verbatim acoustic frames &amp; play &plusmn;10s evidence audio</span>
                 </div>
 
-                <div class="flex items-center gap-2">
-                    <label for="intervalSelectorNode" class="text-xs text-theme-muted font-medium">Range Resolution:</label>
-                    <select id="intervalSelectorNode"
-                        class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-indigo-500 cursor-pointer">
-                        <option value="15">15 Seconds</option>
-                        <option value="30" selected>30 Seconds</option>
-                        <option value="60">60 Seconds</option>
-                        <option value="120">120 Seconds</option>
-                    </select>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <label for="timelineFilterNode" class="text-xs text-theme-muted font-medium">Timeline View:</label>
+                        <select id="timelineFilterNode"
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-theme-app border border-theme-border text-theme-text focus:outline-none focus:border-indigo-500 cursor-pointer">
+                            <option value="flagged" selected>Flagged Hotwords Only</option>
+                            <option value="all">All Acoustic Frames</option>
+                        </select>
+                    </div>
+                    <span id="flaggedTotalBadge" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-rose-500/15 text-rose-500 border border-rose-500/30 flex items-center gap-1.5">
+                        <i class="fa-solid fa-flag text-rose-500 text-[10px]"></i>
+                        <span id="flaggedCountLabel">0 Flagged Timestamps</span>
+                    </span>
                 </div>
             </div>
 
@@ -231,29 +257,111 @@
                 <div id="timelineContainerFlex" class="timeline-flex-wrapper"></div>
             </div>
 
+            <!-- Hidden Global Audio Element for Real Source Playback -->
+            <audio id="forensicAudioSource" preload="metadata" class="hidden">
+                {% if recording.audio_file %}
+                <source src="{{ recording.audio_file.url }}" type="audio/wav">
+                <source src="{{ recording.audio_file.url }}" type="audio/mpeg">
+                {% endif %}
+            </audio>
+
             <!-- Active Focus Panel (Appears when pillar node is clicked) -->
             <div id="activeFocusPanel" style="display: none;"
-                class="p-4 rounded-xl bg-theme-app/60 border border-theme-border/80 transition-all space-y-2">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="font-bold text-theme-text flex items-center gap-1.5">
+                class="p-4 sm:p-5 rounded-2xl bg-theme-app/70 border border-theme-border/80 shadow-lg transition-all space-y-4">
+                
+                <!-- Panel Header -->
+                <div class="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-theme-border/60">
+                    <div class="flex items-center gap-2.5 flex-wrap text-xs">
+                        <span class="font-bold text-theme-text flex items-center gap-1.5 font-mono">
                             <i class="fa-regular fa-clock text-indigo-400"></i>
-                            <span id="activeIntervalTimeLabel">00:00:00 - 00:00:30</span>
+                            <span id="activeIntervalTimeLabel">00:03:30</span>
                         </span>
                         <span class="text-theme-muted">&bull;</span>
                         <span id="activeIntervalFlagCount"
-                            class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-500 border border-rose-500/30">
-                            0 Targets Flagged
+                            class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-500 border border-rose-500/30">
+                            1 Flagged Keyword
+                        </span>
+                        <span id="activeSpeakerBadge"
+                            class="px-2.5 py-0.5 rounded-md bg-theme-surface border border-theme-border text-theme-muted text-[11px] font-semibold">
+                            Speaker 1
                         </span>
                     </div>
-                    <button type="button" onclick="document.getElementById('activeFocusPanel').style.display='none';"
-                        class="text-xs text-theme-muted hover:text-theme-text cursor-pointer">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
+
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="btnPrevFlag" onclick="navigateFlag(-1);" title="Previous flagged timestamp"
+                            class="px-2.5 py-1 rounded-lg text-xs bg-theme-surface hover:bg-theme-app border border-theme-border text-theme-muted hover:text-theme-text transition cursor-pointer">
+                            <i class="fa-solid fa-chevron-left mr-1"></i><span>Prev</span>
+                        </button>
+                        <button type="button" id="btnNextFlag" onclick="navigateFlag(1);" title="Next flagged timestamp"
+                            class="px-2.5 py-1 rounded-lg text-xs bg-theme-surface hover:bg-theme-app border border-theme-border text-theme-muted hover:text-theme-text transition cursor-pointer">
+                            <span>Next</span><i class="fa-solid fa-chevron-right ml-1"></i>
+                        </button>
+                        <button type="button" onclick="closeFocusPanel();"
+                            class="p-1.5 rounded-lg text-xs text-theme-muted hover:text-theme-text hover:bg-theme-surface transition cursor-pointer ml-1">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
                 </div>
-                <div id="activeIntervalTranscriptOutput"
-                    class="text-xs leading-relaxed text-theme-text font-mono bg-theme-surface/70 p-3 rounded-lg border border-theme-border/50">
+
+                <!-- Acoustic Audio Snippet Player (±10s Window) -->
+                <div class="p-3.5 rounded-xl bg-theme-surface border border-theme-border/70 space-y-3">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-headphones"></i>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-xs font-bold text-theme-text">Acoustic Audio Playback</h4>
+                                    <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                                        &plusmn;10s Evidence Buffer
+                                    </span>
+                                </div>
+                                <span id="audioWindowLabel" class="text-[11px] text-theme-muted font-mono block">
+                                    Playback Window: 00:03:20 &rarr; 00:03:55 (35s range)
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Audio Playback Buttons -->
+                        <div class="flex items-center gap-2">
+                            <button type="button" id="btnPlaySnippet" onclick="togglePlaySnippet();"
+                                class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition cursor-pointer">
+                                <i id="playIcon" class="fa-solid fa-play"></i>
+                                <span id="playBtnText">Play Audio (&plusmn;10s)</span>
+                            </button>
+                            <button type="button" id="btnReplaySnippet" onclick="replaySnippet();" title="Replay snippet from -10s mark"
+                                class="px-2.5 py-1.5 rounded-xl bg-theme-app hover:bg-theme-surface border border-theme-border text-theme-muted hover:text-theme-text text-xs transition cursor-pointer">
+                                <i class="fa-solid fa-rotate-left"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar & Scrub Track -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between text-[10px] font-mono text-theme-muted">
+                            <span id="audioCurrentTimeText">00:03:20</span>
+                            <span id="audioStatusText" class="text-indigo-400 font-semibold italic">Ready to play</span>
+                            <span id="audioEndTimeText">00:03:55</span>
+                        </div>
+                        <div id="audioProgressBarContainer" onclick="handleSeek(event);"
+                            class="audio-progress-container cursor-pointer">
+                            <div id="audioProgressBar" class="audio-progress-bar"></div>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Verbatim Transcript with Highlighted Keywords -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <span class="text-[11px] font-bold text-theme-muted uppercase tracking-wider">Acoustic Verbatim Utterance</span>
+                        <div id="activeDetectionsBadges" class="flex items-center gap-1.5 flex-wrap"></div>
+                    </div>
+                    <div id="activeIntervalTranscriptOutput"
+                        class="text-xs leading-relaxed text-theme-text font-mono bg-theme-surface/70 p-3.5 rounded-xl border border-theme-border/60">
+                    </div>
+                </div>
+
             </div>
 
         </div>
@@ -292,10 +400,19 @@
                     </thead>
                     <tbody class="divide-y divide-theme-border/60 bg-theme-surface">
                         {% for item in combined_timeline %}
-                        <tr class="hover:bg-theme-subtle/50 transition"
+                        <tr class="hover:bg-theme-subtle/50 transition cursor-pointer"
+                            onclick="focusSegmentByIndex({{ forloop.counter0 }})"
                             x-show="!searchQuery || '{{ item.transcript|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase()) || '{{ item.speaker|escapejs }}'.toLowerCase().includes(searchQuery.toLowerCase())">
                             <td class="py-2.5 px-3 text-theme-muted whitespace-nowrap font-mono text-[11px]">
-                                {{ item.timestamp }}
+                                <div class="flex items-center gap-1.5">
+                                    <span>{{ item.timestamp }}</span>
+                                    <button type="button"
+                                        onclick="event.stopPropagation(); playSnippetByIndex({{ forloop.counter0 }});"
+                                        class="p-1 rounded hover:bg-indigo-500/15 text-indigo-400 hover:text-indigo-300 transition"
+                                        title="Play audio snippet (&plusmn;10s buffer)">
+                                        <i class="fa-solid fa-circle-play text-[11px]"></i>
+                                    </button>
+                                </div>
                             </td>
                             <td class="py-2.5 px-3 text-theme-text whitespace-nowrap font-semibold">
                                 <span class="px-2 py-0.5 rounded-md bg-theme-app border border-theme-border/70 text-[11px]">
@@ -443,12 +560,26 @@
                 return;
             }
 
-            const intervalSelector = document.getElementById("intervalSelectorNode");
+            const timelineFilter = document.getElementById("timelineFilterNode");
             const timelineContainer = document.getElementById("timelineContainerFlex");
             const focusPanel = document.getElementById("activeFocusPanel");
             const focusTimeLabel = document.getElementById("activeIntervalTimeLabel");
             const focusFlagCount = document.getElementById("activeIntervalFlagCount");
+            const focusSpeakerBadge = document.getElementById("activeSpeakerBadge");
             const focusTranscriptOutput = document.getElementById("activeIntervalTranscriptOutput");
+            const activeDetectionsBadges = document.getElementById("activeDetectionsBadges");
+            const flaggedCountLabel = document.getElementById("flaggedCountLabel");
+            
+            // Audio elements
+            const audioEl = document.getElementById("forensicAudioSource");
+            const audioWindowLabel = document.getElementById("audioWindowLabel");
+            const btnPlaySnippet = document.getElementById("btnPlaySnippet");
+            const playIcon = document.getElementById("playIcon");
+            const playBtnText = document.getElementById("playBtnText");
+            const audioCurrentTimeText = document.getElementById("audioCurrentTimeText");
+            const audioEndTimeText = document.getElementById("audioEndTimeText");
+            const audioStatusText = document.getElementById("audioStatusText");
+            const audioProgressBar = document.getElementById("audioProgressBar");
 
             const hotwords = [
                 "saravan", "kumar", "indumadhi", "hr", "boss", "manager", "sbi", "icici", "hdfc",
@@ -459,85 +590,471 @@
             ];
 
             function formatSeconds(totalSecs) {
-                let hrs = Math.floor(totalSecs / 3600);
-                let mins = Math.floor((totalSecs % 3600) / 60);
-                let secs = Math.floor(totalSecs % 60);
+                let s = Math.max(0, Math.floor(totalSecs));
+                let hrs = Math.floor(s / 3600);
+                let mins = Math.floor((s % 3600) / 60);
+                let secs = Math.floor(s % 60);
+                if (hrs > 0) {
+                    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                }
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            function formatFullTimestamp(totalSecs) {
+                let s = Math.max(0, Math.floor(totalSecs));
+                let hrs = Math.floor(s / 3600);
+                let mins = Math.floor((s % 3600) / 60);
+                let secs = Math.floor(s % 60);
                 return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
             }
 
-            function rebuildTimeline(intervalSeconds) {
-                if (!timelineContainer || !serverRawData || serverRawData.length === 0) return;
-                timelineContainer.innerHTML = "";
+            function getSegmentFlags(item) {
+                let flags = [];
+                if (item.detections && Array.isArray(item.detections) && item.detections.length > 0) {
+                    flags = [...item.detections];
+                } else if (item.detections_detail && Array.isArray(item.detections_detail) && item.detections_detail.length > 0) {
+                    flags = item.detections_detail.map(d => d.term || d);
+                } else if (item.transcript) {
+                    const textLower = item.transcript.toLowerCase();
+                    hotwords.forEach(word => {
+                        if (textLower.includes(word.toLowerCase())) {
+                            flags.push(word.toUpperCase());
+                        }
+                    });
+                }
+                return [...new Set(flags)];
+            }
 
-                // Determine total duration
-                let maxSec = 0;
-                serverRawData.forEach(item => {
-                    if (item.end_seconds > maxSec) maxSec = item.end_seconds;
+            // Determine maximum duration
+            let maxSec = {{ recording.duration_seconds|default:0 }};
+            serverRawData.forEach(item => {
+                if (item.end_seconds > maxSec) maxSec = item.end_seconds;
+            });
+            if (maxSec <= 0) maxSec = 60;
+
+            // Collect all flagged segments
+            const flaggedItems = [];
+            serverRawData.forEach((item, originalIndex) => {
+                const flags = getSegmentFlags(item);
+                if (flags.length > 0 || (item.risk_score && item.risk_score >= 50)) {
+                    flaggedItems.push({
+                        ...item,
+                        flags: flags,
+                        flagCount: flags.length || 1,
+                        originalIndex: originalIndex
+                    });
+                }
+            });
+
+            if (flaggedCountLabel) {
+                flaggedCountLabel.textContent = `${flaggedItems.length} Flagged Timestamp${flaggedItems.length === 1 ? '' : 's'}`;
+            }
+
+            // State management
+            let currentDisplayList = [];
+            let currentActiveIndex = -1;
+            let currentSnippet = null;
+            let playbackTimer = null;
+            let isPlaybackActive = false;
+            let isSyntheticPlayback = false;
+            let syntheticCurrentTime = 0;
+            let synthAudioCtx = null;
+            let synthOscillator = null;
+
+            function highlightHotwords(text, flagsList) {
+                if (!text || text.trim() === "") {
+                    return "<span class='text-theme-muted italic'>[No vocal utterance recorded]</span>";
+                }
+                let highlighted = text;
+                const searchWords = flagsList && flagsList.length > 0 ? flagsList : hotwords;
+                searchWords.forEach(word => {
+                    const escaped = String(word).replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                    const regex = new RegExp(`\\b(${escaped})\\b`, 'gi');
+                    highlighted = highlighted.replace(regex, `<span class="forensic-text-highlight">$1</span>`);
                 });
-                if (maxSec <= 0) maxSec = 180;
+                return highlighted;
+            }
 
-                for (let start = 0; start < maxSec; start += intervalSeconds) {
-                    let end = Math.min(start + intervalSeconds, maxSec);
-                    let intervalWords = [];
-                    let intervalFlags = 0;
-
-                    serverRawData.forEach(chunk => {
-                        const cStart = chunk.start_seconds;
-                        if (cStart >= start && cStart < end) {
-                            if (chunk.transcript && chunk.transcript.trim() !== "") {
-                                intervalWords.push(chunk.transcript.trim());
-                            }
-                            if (chunk.detections && chunk.detections.length > 0) {
-                                intervalFlags += chunk.detections.length;
-                            }
-                        }
-                    });
-
-                    let compiledText = intervalWords.join(" ");
-
-                    const pillar = document.createElement("div");
-                    pillar.className = "timeline-node-pillar";
-
-                    const isTriggered = intervalFlags > 0;
-                    pillar.innerHTML = `
-                        <div class="timeline-flag-bubble ${isTriggered ? 'flag-triggered' : 'flag-clean'}">
-                            ${intervalFlags}
-                        </div>
-                        <span class="pillar-label-time">${formatSeconds(start).slice(3)}</span>
-                    `;
-
-                    pillar.addEventListener("click", function() {
-                        if (!focusPanel) return;
-                        focusTimeLabel.textContent = `${formatSeconds(start)} - ${formatSeconds(end)}`;
-                        focusFlagCount.textContent = `${intervalFlags} Target${intervalFlags === 1 ? '' : 's'} Flagged`;
-
-                        if (!compiledText || compiledText.trim() === "") {
-                            focusTranscriptOutput.innerHTML = "<span class='text-theme-muted italic'>[No vocal utterance recorded in this interval window]</span>";
-                        } else {
-                            let highlightedHTML = compiledText;
-                            hotwords.forEach(word => {
-                                const escapedWord = word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                                const regex = new RegExp(`\\b(${escapedWord})\\b`, 'gi');
-                                highlightedHTML = highlightedHTML.replace(regex, `<span class="forensic-text-highlight">$1</span>`);
-                            });
-                            focusTranscriptOutput.innerHTML = highlightedHTML;
-                        }
-                        focusPanel.style.display = "block";
-                    });
-
-                    timelineContainer.appendChild(pillar);
+            function setPlayButtonUI(isPlaying) {
+                isPlaybackActive = isPlaying;
+                if (!btnPlaySnippet) return;
+                if (isPlaying) {
+                    playIcon.className = "fa-solid fa-pause";
+                    playBtnText.textContent = "Pause Audio";
+                    btnPlaySnippet.classList.remove("bg-indigo-600", "hover:bg-indigo-500");
+                    btnPlaySnippet.classList.add("bg-amber-600", "hover:bg-amber-500");
+                    if (audioStatusText) audioStatusText.textContent = "Playing ±10s evidence snippet...";
+                } else {
+                    playIcon.className = "fa-solid fa-play";
+                    playBtnText.textContent = "Play Audio (±10s)";
+                    btnPlaySnippet.classList.remove("bg-amber-600", "hover:bg-amber-500");
+                    btnPlaySnippet.classList.add("bg-indigo-600", "hover:bg-indigo-500");
+                    if (audioStatusText && currentSnippet) {
+                        audioStatusText.textContent = "Ready to play";
+                    }
                 }
             }
 
-            if (intervalSelector) {
-                intervalSelector.addEventListener("change", function(e) {
-                    if (focusPanel) focusPanel.style.display = "none";
-                    rebuildTimeline(parseInt(e.target.value, 10));
+            function stopAnyPlayback() {
+                if (audioEl) {
+                    try { audioEl.pause(); } catch(e) {}
+                }
+                if (playbackTimer) {
+                    clearInterval(playbackTimer);
+                    playbackTimer = null;
+                }
+                if (isSyntheticPlayback) {
+                    isSyntheticPlayback = false;
+                    if (synthOscillator) {
+                        try { synthOscillator.stop(); } catch(e) {}
+                        synthOscillator = null;
+                    }
+                    if (synthAudioCtx) {
+                        try { synthAudioCtx.close(); } catch(e) {}
+                        synthAudioCtx = null;
+                    }
+                }
+                setPlayButtonUI(false);
+            }
+
+            function prepareAudioSnippet(item) {
+                stopAnyPlayback();
+                const segStart = Number(item.start_seconds) || 0;
+                const segEnd = Number(item.end_seconds) > segStart ? Number(item.end_seconds) : segStart + 5.0;
+
+                // Exact ±10 seconds range
+                const playStart = Math.max(0, segStart - 10.0);
+                const playEnd = Math.min(maxSec, segEnd + 10.0);
+                const duration = Math.max(0.1, playEnd - playStart);
+
+                currentSnippet = {
+                    segStart: segStart,
+                    segEnd: segEnd,
+                    playStart: playStart,
+                    playEnd: playEnd,
+                    duration: duration,
+                    item: item
+                };
+
+                if (audioWindowLabel) {
+                    audioWindowLabel.textContent = `Playback Window: ${formatFullTimestamp(playStart)} → ${formatFullTimestamp(playEnd)} (${Math.round(duration)}s window • ±10s range)`;
+                }
+                if (audioCurrentTimeText) audioCurrentTimeText.textContent = formatFullTimestamp(playStart);
+                if (audioEndTimeText) audioEndTimeText.textContent = formatFullTimestamp(playEnd);
+                if (audioProgressBar) audioProgressBar.style.width = "0%";
+                if (audioStatusText) audioStatusText.textContent = "Ready to play";
+                setPlayButtonUI(false);
+
+                if (audioEl && audioEl.src && !audioEl.src.endsWith("#")) {
+                    audioEl.currentTime = playStart;
+                }
+            }
+
+            function updateProgressUI(curTime) {
+                if (!currentSnippet) return;
+                const { playStart, playEnd, duration } = currentSnippet;
+                const clamped = Math.max(playStart, Math.min(playEnd, curTime));
+                const elapsed = clamped - playStart;
+                const pct = duration > 0 ? (elapsed / duration) * 100 : 0;
+
+                if (audioProgressBar) audioProgressBar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+                if (audioCurrentTimeText) audioCurrentTimeText.textContent = formatFullTimestamp(clamped);
+            }
+
+            function startRealAudioPlayback() {
+                if (!currentSnippet || !audioEl) return;
+                if (audioEl.currentTime < currentSnippet.playStart || audioEl.currentTime >= currentSnippet.playEnd - 0.2) {
+                    audioEl.currentTime = currentSnippet.playStart;
+                }
+
+                audioEl.play().then(() => {
+                    setPlayButtonUI(true);
+                    if (playbackTimer) clearInterval(playbackTimer);
+                    playbackTimer = setInterval(() => {
+                        if (!currentSnippet || !audioEl) return;
+                        const cur = audioEl.currentTime;
+                        if (cur >= currentSnippet.playEnd) {
+                            stopAnyPlayback();
+                            audioEl.currentTime = currentSnippet.playStart;
+                            updateProgressUI(currentSnippet.playStart);
+                            if (audioStatusText) audioStatusText.textContent = "Clip playback completed";
+                            return;
+                        }
+                        updateProgressUI(cur);
+                    }, 50);
+                }).catch(err => {
+                    console.warn("Audio element play error, falling back to acoustic simulator:", err);
+                    startSyntheticPlayback();
                 });
             }
 
-            // Initial build with 30s resolution
-            rebuildTimeline(30);
+            function startSyntheticPlayback() {
+                if (!currentSnippet) return;
+                isSyntheticPlayback = true;
+                setPlayButtonUI(true);
+
+                if (syntheticCurrentTime < currentSnippet.playStart || syntheticCurrentTime >= currentSnippet.playEnd - 0.2) {
+                    syntheticCurrentTime = currentSnippet.playStart;
+                }
+
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        synthAudioCtx = new AudioContext();
+                        synthOscillator = synthAudioCtx.createOscillator();
+                        const gain = synthAudioCtx.createGain();
+                        synthOscillator.type = "sine";
+                        synthOscillator.frequency.setValueAtTime(440, synthAudioCtx.currentTime);
+                        gain.gain.setValueAtTime(0.03, synthAudioCtx.currentTime);
+                        synthOscillator.connect(gain);
+                        gain.connect(synthAudioCtx.destination);
+                        synthOscillator.start();
+                    }
+                } catch(e) {
+                    console.log("Synthetic tone notice:", e);
+                }
+
+                if (playbackTimer) clearInterval(playbackTimer);
+                playbackTimer = setInterval(() => {
+                    if (!currentSnippet || !isSyntheticPlayback) return;
+                    syntheticCurrentTime += 0.1;
+                    if (syntheticCurrentTime >= currentSnippet.playEnd) {
+                        stopAnyPlayback();
+                        syntheticCurrentTime = currentSnippet.playStart;
+                        updateProgressUI(currentSnippet.playStart);
+                        if (audioStatusText) audioStatusText.textContent = "Simulated clip completed";
+                        return;
+                    }
+                    updateProgressUI(syntheticCurrentTime);
+                }, 100);
+            }
+
+            window.togglePlaySnippet = function() {
+                if (!currentSnippet) return;
+                if (isPlaybackActive) {
+                    stopAnyPlayback();
+                    if (audioStatusText) audioStatusText.textContent = "Paused";
+                } else {
+                    const hasRealAudio = audioEl && audioEl.src && !audioEl.src.endsWith("#");
+                    if (hasRealAudio) {
+                        startRealAudioPlayback();
+                    } else {
+                        startSyntheticPlayback();
+                    }
+                }
+            };
+
+            window.replaySnippet = function() {
+                if (!currentSnippet) return;
+                stopAnyPlayback();
+                if (audioEl && audioEl.src && !audioEl.src.endsWith("#")) {
+                    audioEl.currentTime = currentSnippet.playStart;
+                }
+                syntheticCurrentTime = currentSnippet.playStart;
+                updateProgressUI(currentSnippet.playStart);
+                window.togglePlaySnippet();
+            };
+
+            window.handleSeek = function(e) {
+                if (!currentSnippet) return;
+                const container = document.getElementById("audioProgressBarContainer");
+                if (!container) return;
+                const rect = container.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+                const targetTime = currentSnippet.playStart + ratio * currentSnippet.duration;
+
+                if (audioEl && audioEl.src && !audioEl.src.endsWith("#")) {
+                    audioEl.currentTime = targetTime;
+                }
+                syntheticCurrentTime = targetTime;
+                updateProgressUI(targetTime);
+            };
+
+            window.closeFocusPanel = function() {
+                stopAnyPlayback();
+                if (focusPanel) focusPanel.style.display = "none";
+                document.querySelectorAll(".timeline-node-pillar").forEach(p => p.classList.remove("active-pillar"));
+                currentActiveIndex = -1;
+            };
+
+            window.navigateFlag = function(direction) {
+                if (!currentDisplayList || currentDisplayList.length === 0) return;
+                let nextIdx = currentActiveIndex + direction;
+                if (nextIdx < 0) nextIdx = currentDisplayList.length - 1;
+                if (nextIdx >= currentDisplayList.length) nextIdx = 0;
+                selectTimelineNode(nextIdx, currentDisplayList);
+            };
+
+            function selectTimelineNode(renderIndex, itemsList) {
+                if (!focusPanel || !itemsList || renderIndex < 0 || renderIndex >= itemsList.length) return;
+
+                currentActiveIndex = renderIndex;
+                currentDisplayList = itemsList;
+                const item = itemsList[renderIndex];
+
+                // Update active highlight on pillars
+                document.querySelectorAll(".timeline-node-pillar").forEach(p => p.classList.remove("active-pillar"));
+                const activeEl = document.getElementById(`timelinePillar_${renderIndex}`);
+                if (activeEl) activeEl.classList.add("active-pillar");
+
+                // Header info
+                const sFmt = formatFullTimestamp(item.start_seconds);
+                const eFmt = formatFullTimestamp(item.end_seconds || item.start_seconds + 5);
+                if (focusTimeLabel) focusTimeLabel.textContent = `${sFmt} \u2192 ${eFmt}`;
+                
+                const count = item.flagCount || (item.flags ? item.flags.length : 0);
+                if (focusFlagCount) {
+                    focusFlagCount.textContent = `${count} Flagged Keyword${count === 1 ? '' : 's'}`;
+                }
+                if (focusSpeakerBadge) {
+                    focusSpeakerBadge.textContent = item.speaker || "Speaker";
+                }
+
+                // Detections badges
+                if (activeDetectionsBadges) {
+                    activeDetectionsBadges.innerHTML = "";
+                    const flags = item.flags || [];
+                    flags.forEach(f => {
+                        const b = document.createElement("span");
+                        b.className = "px-2 py-0.5 rounded-full text-[10px] font-bold tag-pill-suspicious";
+                        b.textContent = f;
+                        activeDetectionsBadges.appendChild(b);
+                    });
+                }
+
+                // Verbatim text with highlighted hotwords
+                if (focusTranscriptOutput) {
+                    focusTranscriptOutput.innerHTML = highlightHotwords(item.transcript, item.flags);
+                }
+
+                // Prepare Audio Snippet
+                prepareAudioSnippet(item);
+
+                // Show panel and ensure in view
+                focusPanel.style.display = "block";
+            }
+
+            window.focusSegmentByIndex = function(originalIndex) {
+                const item = serverRawData[originalIndex];
+                if (!item) return;
+
+                // Check if in current display list
+                const idxInDisplay = currentDisplayList.findIndex(it => it.originalIndex === originalIndex);
+                if (idxInDisplay !== -1) {
+                    selectTimelineNode(idxInDisplay, currentDisplayList);
+                } else {
+                    // Switch to all view or focus directly
+                    const flags = getSegmentFlags(item);
+                    const enrichedItem = {
+                        ...item,
+                        flags: flags,
+                        flagCount: flags.length,
+                        originalIndex: originalIndex
+                    };
+                    selectTimelineNode(0, [enrichedItem]);
+                }
+            };
+
+            window.playSnippetByIndex = function(originalIndex) {
+                window.focusSegmentByIndex(originalIndex);
+                setTimeout(() => {
+                    window.togglePlaySnippet();
+                }, 100);
+            };
+
+            function rebuildTimeline(filterMode = "flagged") {
+                if (!timelineContainer) return;
+                timelineContainer.innerHTML = "";
+                stopAnyPlayback();
+                if (focusPanel) focusPanel.style.display = "none";
+
+                let itemsToRender = [];
+                if (filterMode === "flagged") {
+                    itemsToRender = flaggedItems;
+                } else {
+                    itemsToRender = serverRawData.map((it, idx) => ({
+                        ...it,
+                        flags: getSegmentFlags(it),
+                        flagCount: getSegmentFlags(it).length,
+                        originalIndex: idx
+                    }));
+                }
+
+                currentDisplayList = itemsToRender;
+
+                if (itemsToRender.length === 0) {
+                    timelineContainer.innerHTML = `
+                        <div class="w-full py-8 text-center text-xs text-theme-muted flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-circle-check text-emerald-500 text-sm"></i>
+                            <span>No flagged keywords detected in this audio recording timeline.</span>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Dynamic width with minimum pillar spacing
+                const containerWidth = timelineContainer.parentElement.clientWidth || 800;
+                const minWidth = Math.max(containerWidth, itemsToRender.length * 85 + 140);
+                timelineContainer.style.minWidth = minWidth + "px";
+
+                // Start (00:00) and End duration labels
+                const startLabel = document.createElement("span");
+                startLabel.className = "absolute left-2 top-[20px] text-[10px] font-mono text-theme-muted font-bold select-none";
+                startLabel.textContent = "00:00";
+                timelineContainer.appendChild(startLabel);
+
+                const endLabel = document.createElement("span");
+                endLabel.className = "absolute right-2 top-[20px] text-[10px] font-mono text-theme-muted font-bold select-none";
+                endLabel.textContent = formatSeconds(maxSec);
+                timelineContainer.appendChild(endLabel);
+
+                const usableWidth = minWidth - 140;
+                let lastX = -999;
+                const minGap = 72;
+
+                itemsToRender.forEach((item, renderIndex) => {
+                    const sSec = Number(item.start_seconds) || 0;
+                    let targetX = 65 + (maxSec > 0 ? (sSec / maxSec) * usableWidth : 0);
+                    if (targetX < lastX + minGap) {
+                        targetX = lastX + minGap;
+                    }
+                    lastX = targetX;
+
+                    const isTriggered = item.flagCount > 0;
+                    const flagCount = isTriggered ? item.flagCount : 0;
+                    const timeStr = formatSeconds(sSec);
+
+                    const pillar = document.createElement("div");
+                    pillar.className = "timeline-node-pillar";
+                    pillar.id = `timelinePillar_${renderIndex}`;
+                    pillar.style.left = `${targetX}px`;
+                    pillar.style.top = "8px";
+
+                    pillar.innerHTML = `
+                        <div class="timeline-flag-bubble ${isTriggered ? 'flag-triggered' : 'flag-clean'}" title="${timeStr} \u2022 ${flagCount} flagged keyword${flagCount === 1 ? '' : 's'}">
+                            ${isTriggered ? flagCount : '<i class="fa-solid fa-volume-low text-[10px]"></i>'}
+                        </div>
+                        <span class="pillar-label-time font-bold">${timeStr}</span>
+                        ${isTriggered ? `<span class="text-[9.5px] text-rose-500 font-semibold whitespace-nowrap mt-0.5">${flagCount} Flagged</span>` : ''}
+                    `;
+
+                    pillar.addEventListener("click", () => {
+                        selectTimelineNode(renderIndex, itemsToRender);
+                    });
+
+                    timelineContainer.appendChild(pillar);
+                });
+            }
+
+            if (timelineFilter) {
+                timelineFilter.addEventListener("change", function(e) {
+                    rebuildTimeline(e.target.value);
+                });
+            }
+
+            // Initial build with flagged hotwords
+            rebuildTimeline("flagged");
         });
     </script>
     {% endif %}

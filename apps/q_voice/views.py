@@ -120,6 +120,8 @@ def custodian_detail_view(request: HttpRequest, custodian_name: str) -> HttpResp
             "transcript": item["transcript"],
             "speaker": item["speaker"],
             "call_ref": item.get("call_ref", ""),
+            "detected_intent": item.get("detected_intent", "General"),
+            "risk_score": item.get("risk_score", 0),
             "detections": item["detections"],
             "detections_detail": item["detections_detail"],
         }
