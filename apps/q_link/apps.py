@@ -10,8 +10,8 @@ class QLinkConfig(AppConfig):
     module_num = "06"
     module_category = "CORRELATOR"
     module_name = "Link"
-    module_tag = "BUILDING"
+    module_tag = "LIVE"
     module_accent = "amber"
-    module_tagline = "Cross-Source Evidence Correlation Engine"
-    module_url = "/demo/tabulator/"
+    module_tagline = "Cross-Source Evidence Correlation & Intelligence Engine"
+    module_url = "/link/"
     module_order = 6
