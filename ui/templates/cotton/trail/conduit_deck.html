@@ -10,11 +10,11 @@
          get sortedConduits() {
              const items = [...(window.conduitDeckData || [])];
              if (this.priorityModel === 'value') {
-                 return items.sort((a, b) => b.scores.value - a.scores.value);
+                 return items.sort((a, b) => (b.scores?.value ?? 0) - (a.scores?.value ?? 0));
              } else if (this.priorityModel === 'velocity') {
-                 return items.sort((a, b) => b.scores.velocity - a.scores.velocity);
+                 return items.sort((a, b) => (b.scores?.velocity ?? 0) - (a.scores?.velocity ?? 0));
              }
-             return items.sort((a, b) => b.scores.composite - a.scores.composite);
+             return items.sort((a, b) => (b.scores?.composite ?? 0) - (a.scores?.composite ?? 0));
          },
          toggle(id) {
              this.expandedConduit = (this.expandedConduit === id) ? null : id;

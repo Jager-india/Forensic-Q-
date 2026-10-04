@@ -273,10 +273,22 @@
     </div>
 
     <!-- Match Tables: Direct Transfers and 1-Hop Intermediate Passes -->
-    <div class="space-y-8 mb-10" x-data="{ activeTab: 'direct' }">
+    <div class="space-y-8 mb-10" x-data="{
+        activeTab: 'direct',
+        switchTab(tab) {
+            this.activeTab = tab;
+            this.$nextTick(() => {
+                if (tab === 'direct' && window.tableDirect) {
+                    window.tableDirect.redraw(true);
+                } else if (tab === 'intermediate' && window.tableIntermediate) {
+                    window.tableIntermediate.redraw(true);
+                }
+            });
+        }
+    }">
         <!-- Tab Bar -->
         <div class="flex items-center gap-2 border-b border-slate-200 dark:border-zinc-800 pb-2">
-            <button @click="activeTab = 'direct'"
+            <button @click="switchTab('direct')"
                 :class="activeTab === 'direct' ? 'bg-amber-500/10 text-amber-500 border-amber-500/30' : 'text-slate-500 hover:text-slate-300 border-transparent'"
                 class="px-3.5 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-2 cursor-pointer">
                 <i class="fa-solid fa-arrows-split-up-and-left text-xs"></i>
@@ -287,7 +299,7 @@
                 </span>
             </button>
 
-            <button @click="activeTab = 'intermediate'"
+            <button @click="switchTab('intermediate')"
                 :class="activeTab === 'intermediate' ? 'bg-amber-500/10 text-amber-500 border-amber-500/30' : 'text-slate-500 hover:text-slate-300 border-transparent'"
                 class="px-3.5 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-2 cursor-pointer">
                 <i class="fa-solid fa-network-wired text-xs"></i>
@@ -404,7 +416,7 @@
                 { title: "Recipient Narration", field: "Recipient_Narration", minWidth: 230, tooltip: true },
             ];
 
-            new Tabulator("#table-direct-transfers", {
+            window.tableDirect = new Tabulator("#table-direct-transfers", {
                 data: directData,
                 columns: directColumns,
                 layout: "fitDataFill",
@@ -467,7 +479,7 @@
                 },
             ];
 
-            new Tabulator("#table-intermediate-transfers", {
+            window.tableIntermediate = new Tabulator("#table-intermediate-transfers", {
                 data: intermediateData,
                 columns: intermediateColumns,
                 layout: "fitDataFill",

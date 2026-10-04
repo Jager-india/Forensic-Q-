@@ -863,12 +863,12 @@
                 activeTab: 'cash',
 
                 // Frequent Transactions State
-                creditChoices: JSON.parse(document.getElementById('credit-choices-data').textContent || '[]'),
-                creditGroups: JSON.parse(document.getElementById('credit-groups-data').textContent || '{}'),
+                creditChoices: JSON.parse(document.getElementById('credit-choices-data')?.textContent || '[]'),
+                creditGroups: JSON.parse(document.getElementById('credit-groups-data')?.textContent || '{}'),
                 selectedCreditEntity: '',
 
-                debitChoices: JSON.parse(document.getElementById('debit-choices-data').textContent || '[]'),
-                debitGroups: JSON.parse(document.getElementById('debit-groups-data').textContent || '{}'),
+                debitChoices: JSON.parse(document.getElementById('debit-choices-data')?.textContent || '[]'),
+                debitGroups: JSON.parse(document.getElementById('debit-groups-data')?.textContent || '{}'),
                 selectedDebitEntity: '',
 
                 // Bulk Transactions State

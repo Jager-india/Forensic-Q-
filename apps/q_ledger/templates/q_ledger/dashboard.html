@@ -288,7 +288,28 @@
     <!-- ============================================================ -->
     <!-- 7 FORENSIC ANOMALY CHECKPOINTS (Interactive Tabs) -->
     <!-- ============================================================ -->
-    <div x-data="{ activeTab: 'prpo' }" class="mb-12">
+    <div x-data="{
+        activeTab: 'prpo',
+        switchTab(tab) {
+            this.activeTab = tab;
+            this.$nextTick(() => {
+                const tableMap = {
+                    'prpo': 'tabulator_table-prpo',
+                    'material': 'tabulator_grid-material',
+                    'ersa': 'tabulator_grid-ersa',
+                    'openpo': 'tabulator_grid-openpo',
+                    'unitprice': 'tabulator_grid-unitprice',
+                    'diffmaterial': 'tabulator_grid-diffmaterial',
+                    'receiptgap': 'tabulator_grid-receiptgap',
+                    'receipt1year': 'tabulator_grid-receipt1year'
+                };
+                const inst = window[tableMap[tab]];
+                if (inst && typeof inst.redraw === 'function') {
+                    inst.redraw(true);
+                }
+            });
+        }
+    }" class="mb-12">
         
         <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div>
@@ -303,7 +324,7 @@
         <!-- Tab Navigation Navigation Pills -->
         <div class="flex items-center space-x-2 overflow-x-auto pb-3 mb-4 scrollbar-thin">
             
-            <button type="button" @click="activeTab = 'prpo'"
+            <button type="button" @click="switchTab('prpo')"
                 :class="activeTab === 'prpo' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
                 class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
                 <i class="fa-solid fa-file-invoice text-xs"></i>
@@ -311,7 +332,7 @@
                 <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_prpo.count|default:"0" }}</span>
             </button>
 
-            <button type="button" @click="activeTab = 'material'"
+            <button type="button" @click="switchTab('material')"
                 :class="activeTab === 'material' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
                 class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
                 <i class="fa-solid fa-list-check text-xs"></i>
@@ -319,7 +340,7 @@
                 <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_material.count|default:"0" }}</span>
             </button>
 
-            <button type="button" @click="activeTab = 'ersa'"
+            <button type="button" @click="switchTab('ersa')"
                 :class="activeTab === 'ersa' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
                 class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
                 <i class="fa-solid fa-screwdriver-wrench text-xs"></i>
@@ -327,7 +348,7 @@
                 <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_ersa.count|default:"0" }}</span>
             </button>
 
-            <button type="button" @click="activeTab = 'openpo'"
+            <button type="button" @click="switchTab('openpo')"
                 :class="activeTab === 'openpo' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
                 class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
                 <i class="fa-solid fa-clock-rotate-left text-xs"></i>
@@ -335,7 +356,7 @@
                 <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_openpo.count|default:"0" }}</span>
             </button>
 
-            <button type="button" @click="activeTab = 'unitprice'"
+            <button type="button" @click="switchTab('unitprice')"
                 :class="activeTab === 'unitprice' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
                 class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
                 <i class="fa-solid fa-tags text-xs"></i>
@@ -343,7 +364,7 @@
                 <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_unitprice.count|default:"0" }}</span>
             </button>
 
-            <button type="button" @click="activeTab = 'diffmaterial'"
+            <button type="button" @click="switchTab('diffmaterial')"
                 :class="activeTab === 'diffmaterial' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
                 class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
                 <i class="fa-solid fa-code-compare text-xs"></i>
@@ -351,7 +372,7 @@
                 <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_diffmaterial.count|default:"0" }}</span>
             </button>
 
-            <button type="button" @click="activeTab = 'receiptgap'"
+            <button type="button" @click="switchTab('receiptgap')"
                 :class="activeTab === 'receiptgap' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
                 class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
                 <i class="fa-solid fa-calendar-xmark text-xs"></i>
@@ -359,7 +380,7 @@
                 <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">{{ checkpoint_receiptgap.count|default:"0" }}</span>
             </button>
 
-            <button type="button" @click="activeTab = 'receipt1year'"
+            <button type="button" @click="switchTab('receipt1year')"
                 :class="activeTab === 'receipt1year' ? 'bg-amber-500 text-zinc-950 font-bold' : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'"
                 class="px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center space-x-2 shadow-sm">
                 <i class="fa-solid fa-hourglass-end text-xs"></i>
